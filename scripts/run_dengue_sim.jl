@@ -17,19 +17,33 @@ using DengueODES.Shared.TimeUtil
 using DengueODES.Dengue          # The module defined in DengueTransmission.jl
 using DengueODES.Dengue.Report   # The submodule
 
-# Ensure output directory exists
-mkpath("outputs/disease_sim")
+
+# Ensure output directories exist
+mkpath(joinpath(@__DIR__, "..", "outputs", "disease_sim"))
+mkpath(joinpath(@__DIR__, "..", "data", "processed"))
 
 println("--- Starting Human Dengue Simulation Pipeline ---")
+
+# -------------------------------------------------------
+# 0. Paths
+# -------------------------------------------------------
+raw_cases_path       = joinpath(@__DIR__, "..", "data", "raw", "dengue_cases-2010_2022.csv")
+processed_cases_path = joinpath(@__DIR__, "..", "data", "processed", "dengue_case_data.csv")
+mkpath(dirname(processed_cases_path))
+
 
 # -------------------------------------------------------
 # 1. Load Data (Cases + Weather)
 # -------------------------------------------------------
 
 # A. Process Cases (Target Data)
-println("Loading dengue case data...")
+println("\n[1] Processing dengue case data...")
+println("   Input:  $raw_cases_path")
 # Uses the function from data.jl you uploaded
-cases_df = DengueODES.Dengue.get_dengue_data() 
+cases_df = Dengue.get_dengue_data(filename=raw_cases_path, mean=true)
+
+println("Saving processed dengue case data...")
+CSV.write(processed_cases_path, cases_df)
 # NOTE: Your CSV uses 'dt_sin_pri' for dates, not 'date'
 sim_start_date = minimum(cases_df.dt_sin_pri)
 sim_end_date   = maximum(cases_df.dt_sin_pri)

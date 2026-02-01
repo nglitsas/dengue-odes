@@ -43,7 +43,7 @@ function run_dengue_simulation(case_df::DataFrame,
 
     # 2. Setup Parameters
     # Initialize default parameters
-    p = ModelParams(temp_interp=temp_interp)
+    p = ModelParams(t_start = t_start,; temp_interp=temp_interp)
 
     # 2a. Overwrite with fitted params if provided
     # (Example: If you are fitting Reporting Rate or Beta)

@@ -13,6 +13,7 @@ using RollingFunctions
 # 1. Access Shared Modules from the Parent (DengueODES -> Shared)
 using ..Shared.Temperature
 using ..Shared.TimeUtil
+using ..MosquitoCapture.Entomology
 
 # 2. Include Local Modules (Same directory)
 include("epidem_ento_functions.jl") 
@@ -27,7 +28,9 @@ include("Report.jl")
 # 3. Use the Modules
 using .Temperature
 using .EpidemEnto
+using .DengueModel
 using .Simulate
+
 
 export 
     ModelParams,

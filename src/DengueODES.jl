@@ -10,7 +10,7 @@ include("models/disease/DengueTransmission.jl")
 # 3. Export Modules
 using .Shared
 using .MosquitoCapture
-using .Dengue 
+using .Dengue
 
 export Shared, MosquitoCapture, Dengue
 

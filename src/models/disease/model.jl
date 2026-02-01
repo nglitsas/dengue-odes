@@ -1,6 +1,13 @@
+module DengueModel
+
 using DifferentialEquations
 import DataInterpolations
+
+using ..EpidemEnto
+
 const AbstractInterpolation = DataInterpolations.AbstractInterpolation
+
+export ModelParams, DengueModel!, default_u0, IX_Mₐ, IX_Mₛ, IX_Mₑ, IX_M, IX_Hₛ, IX_Hₑ, IX_Hᵢ, IX_Hᵣ
 
 # ==========================================
 # 1. THE HELPER
@@ -9,6 +16,7 @@ resolve(x::Function, t) = x(t)
 resolve(x, t) = x
 
 # struct_defs.jl
+const N_HOUSEHOLDS = 102751.0
 
 Base.@kwdef struct ModelParams
     # --- FIXED CONSTANTS (Table 1) ---
@@ -21,14 +29,15 @@ Base.@kwdef struct ModelParams
     cₘ  = 0.0              # Control (Adult)
 
     # --- CARRYING CAPACITY ---
-    C₀ = 0.5 * N             
-    bₖ = 0.3165            
-    ϵ  = 909.0             
+    C₀ = 0.1061326 * N_HOUSEHOLDS             
+    bₖ = 0.453566          
+    ϵ  = 4910.463          
 
     # --- INITIALIZATION ---
     ϕ  = 0.14              
 
     # --- DRIVERS ---
+    t_start::Float64 
     # We replace the individual rate placeholders with just the temperature data
     temp_interp::AbstractInterpolation 
 end
@@ -49,7 +58,7 @@ function default_u0(p::ModelParams, t0::Float64)
     # Use the actual start time t0 instead of 0.0
     # Calculate the initial carrying capacity using the parameters in p
     # We use p.C₀, p.bₖ, and p.ϵ because those ARE in your ModelParams
-    C_initial = get_carrying_capacity(t0, p.C₀, p.bₖ, p.ϵ)
+    C_initial = get_carrying_capacity(t0, p.C₀, p.bₖ, p.ϵ, p.t_start)
 
     N_val = p.N
 
@@ -90,7 +99,7 @@ function DengueModel!(du, u, p::ModelParams, t)
     r = EpidemEnto.get_rates(t, p.temp_interp) 
 
     # 2. CALCULATE CARRYING CAPACITY
-    C_val = EpidemEnto.get_carrying_capacity(t, p.C₀, p.bₖ, p.ϵ)
+    C_val = EpidemEnto.get_carrying_capacity(t, p.C₀, p.bₖ, p.ϵ, p.t_start)
 
     # 3. TOTALS
     M = Mₛ + Mₑ + Mᵢ
@@ -122,3 +131,5 @@ function DengueModel!(du, u, p::ModelParams, t)
 
     return nothing
 end
+
+end # module DengueModel
