@@ -9,8 +9,11 @@ using Printf
 
 # Import siblings
 using ..Simulate
+using ..MosquitoModelDynamics
+using ..Constants
 
-export plot_mosquito_simulation, summarize_mosquito_fit
+export plot_mosquito_simulation, summarize_mosquito_fit, mosquito_mfai_comp_table
+
 
 """
     plot_mosquito_simulation(trap_df, temp_interp; fitted_params=nothing, kwargs...)
@@ -125,6 +128,50 @@ function summarize_mosquito_fit(trap_df::DataFrame, sim)
     println("="^30 * "\n")
 
     return (SSE=sse, RMSE=rmse, MAE=mae)
+end
+"""
+    mosquito_mfai_comp_table(trap_df, sim)
+
+Returns a DataFrame with observed MFAI and predicted MFAI at each observed timestamp.
+Also includes residuals (obs - pred).
+"""
+function mosquito_mfai_comp_table(trap_df::DataFrame, sim)
+    # --- observed MFAI ---
+    if hasproperty(trap_df, :mfai_obvs)
+        mfai_observed = Float64.(trap_df.mfai_obvs)
+    elseif hasproperty(trap_df, :mfai)
+        mfai_observed = Float64.(trap_df.mfai)
+    else
+        error("trap_df missing observed MFAI column (:mfai_obvs or :mfai)")
+    end
+
+    # --- observed times (days since first trap date) ---
+    start_date = minimum(trap_df.date)
+    observed_times = Float64[Dates.value(d - start_date) for d in trap_df.date]
+
+    # --- predicted MFAI ---
+    # Prefer the precomputed vector from simulation output (what your plots use)
+    mfai_predicted = if hasproperty(sim, :mfai_pred) && length(sim.mfai_pred) == length(observed_times)
+        Float64.(sim.mfai_pred)
+    else
+        # Fallback: compute from the ODE solution at observed times
+        # (works if `sim` is an ODESolution-like object)
+        MosquitoModelDynamics.compute_mfai_theo(
+            sim,
+            observed_times,
+            MosquitoModelDynamics.IX_T,
+            Constants.N_TRAPS
+        )
+    end
+
+    df = DataFrame(
+        date = trap_df.date,
+        t_sim_days = observed_times,
+        mfai_observed = mfai_observed,
+        mfai_predicted = mfai_predicted,
+    )
+    df.residual = df.mfai_observed .- df.mfai_predicted
+    return df
 end
 
 end # module

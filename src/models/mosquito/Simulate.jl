@@ -3,9 +3,11 @@ module Simulate
 using DifferentialEquations
 using Dates
 using DataFrames
+using Printf
 
 using ..Constants
 using ..MosquitoModelDynamics
+using ...Shared.TimeUtil
 
 export run_mosquito_simulation
 
@@ -32,35 +34,23 @@ function run_mosquito_simulation(trap_df::DataFrame,
 
     println("\n=== Starting Simulation ===")
 
-    # 1. Setup Time Axis (Align with Fitting.jl logic)
-    #    t=0 corresponds to the first day in the data.
+    # 1. Setup Time Axis 
     start_date = minimum(trap_df.date)
     end_date   = maximum(trap_df.date)
-    total_days = Float64(Dates.value(end_date - start_date))
 
-    println("Simulation Range: $start_date to $end_date ($total_days days)")
+    # CHANGE THIS: Use the global t values
+    t_start = TimeUtil.date_to_t(start_date)
+    t_end   = TimeUtil.date_to_t(end_date)
 
-    # Simulate 5 days past the end to prevent cut-off errors in plots
-    tspan = (0.0, total_days + 5.0)
+    println("Simulation Range: $start_date to $end_date (t: $t_start to $t_end)")
 
-    # 2. Setup Parameters
-    if isnothing(fitted_params)
-        println("No fitted parameters provided. Using defaults.")
-        # Default safe values
-        C0, bk, eps = 1.0, 0.005, 800.0
-    else
-        C0, bk, eps = fitted_params
-    end
+    # Set the span using absolute time
+    tspan = (t_start, t_end + 5.0)
 
-    params = MosquitoModelDynamics.MosquitoModelParams(
-        Nⱼ = Constants.N_TRAPS,
-        H₀ = Constants.N_HOUSEHOLDS,
-        j  = Constants.ALPHA,
-        k  = Constants.K,
-        C₀ = C0,
-        bₖ = bk,
-        ϵ  = eps,
-        temp_interp = temp_interp
+    params = MosquitoModelDynamics.build_params(
+        temp_interp, 
+        t_start = t_start,; 
+        fitted_params = fitted_params
     )
 
     # 3. Setup and Solve ODE
@@ -87,6 +77,8 @@ function run_mosquito_simulation(trap_df::DataFrame,
     # B. Discrete Predictions (for scatter plotting against Truth)
     #    We need to calculate model predictions specifically at the rows in trap_df
     data_times = Float64[Dates.value(d - start_date) for d in trap_df.date]
+
+    data_times = TimeUtil.date_to_t.(trap_df.date)
 
     mfai_pred = MosquitoModelDynamics.compute_mfai_theo(
         sol,

@@ -34,9 +34,10 @@ Base.@kwdef struct MosquitoModelParams{I}
     k = Constants.K     # Fraction hatchlings female
 
     # --- Fitting Parameters for Carrying Capacity C(t) ---
-    C₀ = 1.33     # Initial carrying capacity (from paper)
-    bₖ = 0.3165      # Growth rate (b_cap) (from paper)
-    ϵ = 909       # Time threshold (epsilon) (from paper)
+    C₀ = 1.33 # Initial carrying capacity (from paper) per household
+    bₖ =  0.3165      # Growth rate (b_cap) (from paper)
+    ϵ = 909.0      # Time threshold (epsilon) (from paper)
+    t_start::Float64 
 
     # --- Forcing Data ---
     # Holds the interpolation object (e.g., LinearInterpolation)
@@ -49,9 +50,11 @@ end
 
 Create MosquitoModelParams using defaults, optionally overriding [C₀, bₖ, ϵ].
 """
-function build_params(temp_interp; fitted_params::Union{Nothing,AbstractVector{<:Real}}=nothing)
+function build_params(temp_interp; t_start::Float64,
+    fitted_params::Union{Nothing,AbstractVector{<:Real}}=nothing)
     if fitted_params === nothing
-        return MosquitoModelParams(temp_interp=temp_interp)  # uses defaults from @kwdef
+        println("No fitted parameters provided. Using defaults.")
+        return MosquitoModelParams(t_start=t_start, temp_interp=temp_interp)  # uses defaults from @kwdef
     end
     @assert length(fitted_params) == 3 "Expected fitted_params = [C₀, bₖ, ϵ]"
     C0, bk, eps = fitted_params
@@ -59,6 +62,7 @@ function build_params(temp_interp; fitted_params::Union{Nothing,AbstractVector{<
         C₀ = Float64(C0),
         bₖ = Float64(bk),
         ϵ  = Float64(eps),
+        t_start = t_start,
         temp_interp = temp_interp
     )
 end
@@ -67,7 +71,7 @@ end
 Default initial condition vector u0 = [A, M, T].
 """
 function default_u0(p::MosquitoModelParams;
-    A₀::Real = 0.85 * p.C₀, # From paper results
+    A₀::Real = 0.85 * p.C₀ * p.H₀, # From paper results
     M₀::Real = 0.7 * Constants.POPULATION, # Scaled to city population
     T₀::Real = 0.0
 )
@@ -82,6 +86,9 @@ Dynamically calculates biological rates based on temperature at time t.
 """
 function CaptureModel!(du, u, p::MosquitoModelParams, t)
     A, M, T = u
+    if t < p.t_start + 0.00001
+        @info "Step Check" t Aquatic=A Adults=M
+    end
 
     # --- 1. Get Dynamic Rates ---
     
@@ -89,8 +96,19 @@ function CaptureModel!(du, u, p::MosquitoModelParams, t)
     # Returns: (oviposition, aquatic_transition, aquatic_mortality, adult_mortality)
     δₜ, γₘₜ, μₐₜ, μₘₜ = Entomology.get_rates(t, p.temp_interp)
 
+    # 2. EMERGENCY PRINT
+    if t < p.t_start + 0.0001
+        println("--- ENTOMOLOGY CHECK ---")
+        println("  Temp: $(p.temp_interp(t))")
+        println("  Oviposition (δ): $δₜ")
+        println("  Transition (γ): $γₘₜ")
+        println("  Larval Death (μ_a): $μₐₜ")
+        println("  Adult Death (μ_m): $μₘₜ")
+        println("------------------------")
+    end
+
     # Calculate Carrying Capacity C(t)
-    C_t = Entomology.get_carrying_capacity(t, p.C₀, p.bₖ, p.ϵ)
+    C_t = Entomology.get_carrying_capacity(t, p.C₀, p.bₖ, p.ϵ, p.t_start)
     
     # Safety clamp for C(t)
     C_t = max(C_t, 1e-6)
@@ -113,15 +131,18 @@ function CaptureModel!(du, u, p::MosquitoModelParams, t)
     oviposition = effective_birth_rate * M
 
     # --- 3. Equations ---
-
     # dA/dt = Births - Emergence - Death
     du[IX_A] = oviposition - emergence - (μₐₜ * A)
-
     # dM/dt = Emergence - Death - Trapped
     du[IX_M] = emergence - (μₘₜ * M) - trapping_flow
-
     # dT/dt = Accumulation of trapped mosquitoes
     du[IX_T] = trapping_flow
+
+    # Check for NaNs
+    if isnan(du[IX_A]) || isnan(du[IX_M]) || isinf(du[IX_A])
+        @error "Explosion detected!" t u du_A=du[IX_A] C_t p
+        error("Solver halted due to math explosion")
+    end
 
     return nothing
 end

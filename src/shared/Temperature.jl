@@ -61,15 +61,25 @@ function get_temperature_interpolator(weather_df::DataFrame)
 
     # 3. Convert time using your external utility
     # Ensure this returns a Vector{Float64} representing Days
+    # Must sort before conversion to maintain order
+    sort!(clean_df, :date)
     t_vals = Float64.(date_to_t.(clean_df.date))
     
     # 4. Extract Temps
     temp_vals = Float64.(clean_df.temp)
+    
+    # 4a. Sanity Check for NaNs
+    @assert !any(isnan, temp_vals) "Weather data contains NaNs!"
+    @assert !any(isnan, t_vals)    "Time values contain NaNs!"
 
     # 5. Create Interpolator
     # We use LinearInterpolation. 
     # Note: If the solver steps outside the date range, this might throw an error.
-    return LinearInterpolation(temp_vals, t_vals)
+    return return LinearInterpolation(
+        temp_vals, 
+        t_vals, 
+        extrapolation = ExtrapolationType.Constant
+    )
 end
 
 end # module

@@ -17,7 +17,7 @@ using DengueODES.MosquitoCapture
 using DengueODES.MosquitoCapture.Report 
 
 # Ensure output directory exists
-mkpath("outputs/mosquito_fit")
+mkpath("outputs/mosquito_sim")
 
 println("--- Starting Mosquito Model Simulation Pipeline ---")
 
@@ -27,13 +27,22 @@ println("--- Starting Mosquito Model Simulation Pipeline ---")
 
 # A. Process Weather & Create Interpolator
 # This now calls your cleaned Temperature.jl
-weather_df = Temperature.get_weather_data(force_process=true)
-# NOTE: We don't need the second return value (start_date) anymore!
-temp_interp = Temperature.get_temperature_interpolator(weather_df)
 
 # B. Process Trap Data
 # Assuming Data.get_trap_data() is the correct function name in your current setup
 trap_df = DengueODES.MosquitoCapture.Data.get_trap_data()
+sim_start_date = minimum(trap_df.date)
+sim_end_date   = maximum(trap_df.date)
+
+weather_df = Temperature.get_weather_data(force_process=true)
+
+# C. CUT WEATHER DATA
+# We keep 1 day before/after as a safety buffer for the solver
+buffer = Day(1)
+weather_subset = filter(row -> (sim_start_date - buffer) <= row.date <= (sim_end_date + buffer), weather_df)
+
+# D. Create the Interpolator with the SUBSET
+temp_interp = Temperature.get_temperature_interpolator(weather_subset)
 
 # -------------------------------------------------------
 # 2. Run Simulation / Fit
@@ -52,18 +61,18 @@ results = Report.plot_mosquito_simulation(
 # -------------------------------------------------------
 println("Saving outputs...")
 
-savefig(results.sim_plot, "outputs/mosquito_fit/sim_plot.png")
-savefig(results.resid_plot, "outputs/mosquito_fit/residuals_plot.png")
+savefig(results.sim_plot, "outputs/mosquito_sim/sim_plot.png")
+savefig(results.resid_plot, "outputs/mosquito_sim/sim_resids_plot.png")
 
 # Calculate summary stats
-stats = summarize_mosquito_simulation(trap_df, results.sim)
+stats = Report.summarize_mosquito_fit(trap_df, results.sim)
 
 CSV.write(
-    "outputs/mosquito_fit/sim_summary.csv",
+    "outputs/mosquito_sim/sim_summary.csv",
     DataFrame([stats])
 )
 
-println("Done! Results saved to outputs/mosquito_fit/")
+println("Done! Results saved to outputs/mosquito_sim/")
 
 
 # ... (after savefig lines) ...
