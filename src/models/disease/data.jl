@@ -2,8 +2,28 @@ using CSV
 using DataFrames
 using Dates
 using Statistics
+using RollingFunctions # Might need to add this package: ] add RollingFunctions
 
 export get_dengue_data
+
+# --- ADDED HELPER: Rolling Mean ---
+function rolling_mean_df(df::DataFrame, date_col::Symbol, window::Int)
+    # create a copy to avoid modifying original
+    res = copy(df)
+    
+    # identify numeric columns to smooth
+    cols_to_smooth = names(res, Number)
+    
+    # Apply rolling mean to each numeric column
+    for c in cols_to_smooth
+        # use runmean from RollingFunctions or manual calculation
+        res[!, c] = runmean(res[!, c], window)
+    end
+    
+    # Filter out the first few rows where the rolling mean is incomplete
+    # (The first 'window-1' rows usually have artifacts)
+    return res[window:end, :]
+end
 
 """
     get_dengue_data(; filename="../dengue_cases-2010_2022.csv", mean=true)
@@ -19,9 +39,9 @@ Parameters:
 
 Returns: DataFrame with `dt_sin_pri::Date` and remaining columns.
 """
-function get_dengue_data(; filename::AbstractString = "../data/dengue_cases-2010_2022.csv",
-                          mean::Bool = true)::DataFrame
-    path = _relpath(filename)
+function get_dengue_data(; filename::AbstractString = "data/raw/dengue_cases-2010_2022.csv",
+                           mean::Bool = true)::DataFrame
+    path = abspath(filename)
     df = CSV.read(path, DataFrame)
 
     @assert "dt_sin_pri" in names(df) "Expected a 'dt_sin_pri' column in $path"

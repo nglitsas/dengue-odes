@@ -27,10 +27,10 @@ end
 # ==========================================
 # 2. CARRYING CAPACITY C(t)
 # ==========================================
-function get_carrying_capacity(t, C₀, b_cap, ϵ)
+function get_carrying_capacity(t, C₀, bₖ, ϵ)
     dt = t - ϵ
     ramp_active = smooth_heaviside(dt, 2.0)
-    return C₀ + b_cap * ramp_active
+    return C₀ + bₖ * ramp_active
 end
 
 # ==========================================

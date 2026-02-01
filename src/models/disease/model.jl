@@ -1,4 +1,6 @@
 using DifferentialEquations
+import DataInterpolations
+const AbstractInterpolation = DataInterpolations.AbstractInterpolation
 
 # ==========================================
 # 1. THE HELPER
@@ -7,7 +9,6 @@ resolve(x::Function, t) = x(t)
 resolve(x, t) = x
 
 # struct_defs.jl
-using DataInterpolations
 
 Base.@kwdef struct ModelParams
     # --- FIXED CONSTANTS (Table 1) ---
@@ -20,7 +21,7 @@ Base.@kwdef struct ModelParams
     cₘ  = 0.0              # Control (Adult)
 
     # --- CARRYING CAPACITY ---
-    C₀ = 1.33              
+    C₀ = 0.5 * N             
     bₖ = 0.3165            
     ϵ  = 909.0             
 
@@ -44,16 +45,19 @@ const IX_Hₑ = 6
 const IX_Hᵢ = 7
 const IX_Hᵣ = 8
 
-function default_u0(p::ModelParams)
-    # Calculate initial values based on paper's logic
-    C_initial = resolve(p.C, 0.0)
+function default_u0(p::ModelParams, t0::Float64)
+    # Use the actual start time t0 instead of 0.0
+    # Calculate the initial carrying capacity using the parameters in p
+    # We use p.C₀, p.bₖ, and p.ϵ because those ARE in your ModelParams
+    C_initial = get_carrying_capacity(t0, p.C₀, p.bₖ, p.ϵ)
+
     N_val = p.N
 
     # Note: Paper assumes specific start proportions, usually mostly susceptible
     M_a0 = 0.2 * C_initial  # Arbitrary initialization for aquatic
     M_s0 = 0.3 * C_initial  # Arbitrary initialization for adults
     M_e0 = 0.0
-    M_i0 = 0.0
+    M_i0 = 0
 
     # Human Initial states
     # If starting with an outbreak, H_i0 > 0
@@ -63,10 +67,18 @@ function default_u0(p::ModelParams)
     # Remaining population is Susceptible
     H_s0 = N_val - H_e0 - H_i0 - H_r0
     
+    # Diagnostic for intial values
+    println("--- Initial State Debug ---")
+    println("Start Time (t0): ", t0)
+    println("Carrying Capacity: ", C_initial)
+    println("Initial Humans (Ih): ", 1.0)
+    println("Initial Mosquitoes (Ms): ", 0.3 * C_initial)
+
     return Float64[
         M_a0, M_s0, M_e0, M_i0,
         H_s0, H_e0, H_i0, H_r0
     ]
+
 end
 
 # dynamics.jl
