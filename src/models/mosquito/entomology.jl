@@ -7,28 +7,24 @@ export get_carrying_capacity, get_rates
 
 # --- 1. The Function to Fit: Carrying Capacity C(t) ---
 @inline function smooth_heaviside(x, k)
-    return 1.0 / (1.0 + exp(-2.0 * k * x))
-end 
+    z = -2.0 * k * x
+    z = clamp(z, -60.0, 60.0)
+    return 1.0 / (1.0 + exp(z))
+end
 
 function get_carrying_capacity(t, C₀, b_cap, ϵ, t_start)
-    dt_raw = (t - t_start) - ϵ
-    t_start=0.0
-    dt = (t - t_start) - ϵ
+    # Time since the ramp started (negative before ϵ, positive after)
+    dt = t - t_start - ϵ
+
+    # Smooth transition around ϵ (width controlled by k=2.0 → quite sharp)
     u_t = smooth_heaviside(dt, 2.0)
 
-    capacity_multiplier = (C₀ + b_cap * u_t * dt_raw)
-    final_capacity = capacity_multiplier * Constants.N_HOUSEHOLDS
+    # Linear growth in capacity after ϵ, flat before
+    # b_cap now has units of capacity per time unit (e.g. households per day)
+    growth_term = b_cap * dt * u_t   # only grows after transition
 
-    # Only print at the very beginning to avoid flooding the terminal
-    if t < t_start + 0.0001
-        println("--- CAPACITY DEBUG ---")
-        println("  t: $t | t_start: $t_start | ϵ: $ϵ")
-        println("  dt_raw: $dt_raw")
-        println("  u_t (Heaviside): $u_t")
-        println("  Multiplier: $capacity_multiplier")
-        println("  Final C_t: $final_capacity")
-        println("-----------------------")
-    end
+    capacity_multiplier = C₀ + growth_term
+    final_capacity = capacity_multiplier * Constants.N_HOUSEHOLDS
 
     return final_capacity
 end

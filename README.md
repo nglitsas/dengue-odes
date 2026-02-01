@@ -1,227 +1,148 @@
 # Dengue-ODES
 
-This repository implements temperature-dependent ordinary differential equation (ODE) models
-for mosquito population dynamics and dengue transmission, following the methodology of
-Rauh et al. (2025) for Foz do Iguaçu, Brazil.
+Temperature-dependent ordinary differential equation (ODE) models for **mosquito population dynamics** and **dengue transmission**, inspired by the methodology in Rauh et al. (2025) for Foz do Iguaçu, Brazil.
 
-The project contains:
+The repository includes:
+- A standalone mosquito capture model calibrated to trap data (MFAI)
+- A coupled human–mosquito dengue transmission model
+- Sequential calibration pipelines (mosquito → disease)
+- Reproducible fitting, simulation, and reporting scripts
 
-- A mosquito-only capture model calibrated to trap data
-- A full human–mosquito dengue transmission model
-- A sequential calibration pipeline
-- Reproducible simulation and fitting scripts
-
-
-## Top Level Repository Structure
-
+## Repository Structure
 Dengue-ODES/
+├── configs/               # Parameter bounds, fit windows, fixed params, paths
 ├── data/
-├── configs/
-├── scripts/
-├── src/
+│   ├── raw/               # Original trap, case, weather data
+│   └── processed/         # Cleaned CSVs (mosq_trapped_model.csv, temperature_2010_2022.csv)
+├── scripts/               # Entry-point executables
+├── src/                   # Core Julia package (DengueODES)
+│   ├── DengueODES.jl
+│   ├── models/
+│   │   ├── disease/       # Dengue full model
+│   │   └── mosquito/      # Mosquito-only capture model
+│   ├── observe/           # Observation models (MFAI, incidence)
+│   └── shared/            # Utilities (temperature, time, forcing, etc.)
 ├── outputs/
+│   ├── mosquito_fit/      # Fitted params, plots, stats
+│   ├── disease_fit/
+│   └── mosquito_sim/
 ├── test/
-├── LICENSE
-├── Manifest.toml
+├── archive/               # Older / alternative implementations
 ├── Project.toml
+├── Manifest.toml
 └── README.md
+text## Core Package Layout (src/DengueODES.jl)
 
+All modeling logic is exposed via the `DengueODES` package.
 
+### Shared Utilities (`src/shared/`)
 
-## Source Code Layout
+- `TimeUtil.jl` — Date ↔ continuous time conversion
+- `Temperature.jl` — Weather data → interpolation / forcing functions
+- `Forcing.jl` — Temperature-dependent rates
+- `Params.jl` — Parameter structs
+- `IO.jl` — Data I/O helpers
 
-All modeling code is organized as a single Julia package.
+### Observation Models (`src/observe/`)
 
-src/
-└── DengueODES.jl
+- `MFAI.jl` — Theoretical mosquito-female adult index from trap model
+- `Incidence.jl` — Reported dengue cases from human compartments
 
+### Mosquito Model (`src/models/mosquito/`)
 
+Temperature-sensitive aquatic + adult dynamics calibrated to trap MFAI.
 
-### Core Utilities
+| File              | Purpose                              |
+|-------------------|--------------------------------------|
+| `constants.jl`    | Fixed biological / site parameters   |
+| `model_dynamics.jl` | ODE right-hand side (`CaptureModel!`) |
+| `fitting.jl`      | Parameter estimation (C₀, bₖ, ϵ)     |
+| `Report.jl`       | Diagnostics, plots, summary tables   |
+| `Simulate.jl`     | Forward simulation                   |
 
-src/Core/
+### Disease Model (`src/models/disease/`)
 
+Full SEIR-like human + mosquito transmission (not yet fully detailed in README).
 
-Shared infrastructure used by both mosquito and disease models.
+## Multithreaded / Parallel Fitting (Mosquito Model)
 
-| File | Purpose |
-|------|----------|
-| Time.jl | Date and time indexing |
-| Temperature.jl | Climate preprocessing |
-| Forcing.jl | Temperature-dependent parameters |
-| Params.jl | Parameter and result structs |
-| Solve.jl | ODE solver wrappers |
-| Losses.jl | Objective functions |
-| IO.jl | Data loading and saving |
+The mosquito parameter fitting (`src/models/mosquito/fitting.jl`) uses **Latin Hypercube Sampling (LHS)** to explore parameter space efficiently.
 
+Key features:
+- **Parallel evaluation** of 800–2000+ samples via Julia's built-in multithreading (`@threads`)
+- Each ODE solve runs independently → near-linear speedup on multi-core machines (e.g., 6–7× on 8 threads)
+- Handles unstable solves gracefully (large penalty for blow-ups)
+- Uses stiff-capable solvers (e.g., `Rodas5P`, `Rosenbrock23`) for better stability
 
-### Observation Models
-
-src/Observe/
-
-
-Maps model states to observed data.
-
-| File | Purpose |
-|------|----------|
-| MFAI.jl | Trap counts to $MFAI_{theo}$ |
-| Incidence.jl | Human states to reported cases |
-
-
-### Mosquito Model
-
-src/Models/Mosquito/
-
-
-Implements the mosquito capture model.
-
-| File | Purpose |
-|------|----------|
-| RHS.jl | ODE system |
-| Init.jl | Initial conditions |
-| Simulate.jl | Forward simulation |
-| Fit.jl | Fit C0, bcap, epsilon |
-| Report.jl | Diagnostics and plots |
-
-
-### Disease Model
-
-src/Models/Disease/
-
-
-Implements the dengue transmission model.
-
-| File | Purpose |
-|------|----------|
-| RHS.jl | ODE system |
-| Init.jl | Initial conditions |
-| Simulate.jl | Forward simulation |
-| Fit.jl | Fit transmission parameters |
-| Report.jl | Diagnostics and plots |
-
-
-## Scripts
-
-scripts/
-
-
-Reproducible execution pipeline.
-
-| Script | Purpose |
-|--------|----------|
-| run_mosquito_fit.jl | Calibrate mosquito model |
-| run_disease_fit.jl | Calibrate disease model |
-| run_all.jl | Full pipeline |
-
-
-Example:
-
+To take full advantage:
 ```bash
-julia --project scripts/run_mosquito_fit.jl
-Data
-data/
-├── raw/
-└── processed/
-Contains trap counts, dengue cases, and climate data.
-Raw data should not be edited.
+JULIA_NUM_THREADS=8 julia scripts/run_mosquito_fit.jl
+# or make it permanent: export JULIA_NUM_THREADS=8
+```
+# Scripts (scripts/)
 
-Outputs
-outputs/
-├── mosquito_fit/
-└── disease_fit/
-Stores fitted parameters, trajectories, and figures.
+Reproducible entry points.
 
-Modeling Pipeline
-Stage 1: Mosquito Calibration
-Uses trap data only.
+| Script                  | Purpose                                              |
+|-------------------------|------------------------------------------------------|
+| `run_mosquito_fit.jl`   | Calibrate mosquito model (C₀, bₖ, ϵ) to trap data    |
+| `run_mosquito_sim.jl`   | Forward simulation with fixed/fitted params          |
+| `run_dengue_fit.jl`     | Calibrate transmission parameters (in progress)      |
+| `run_all.jl`            | Full sequential pipeline                             |
+| `run_pipeline.jl`       | Alternative / experimental workflow                  |
 
-Input:
+Example usage:
+```bash
+JULIA_NUM_THREADS=8 julia --project scripts/run_mosquito_fit.jl
+```
+## File Structure
+### Data
 
-Climate data
+data/raw/ — Original sources (do not modify)
+data/processed/ — Cleaned inputs for fitting/simulation
 
-Trap counts
+### Outputs
+Results saved under outputs/:
 
-Fitted parameters:
+mosquito_fit/ — fitted_params.csv, fit_plot.png, fit_stats.csv, mfai_observed_vs_pred.csv, etc.
+mosquito_sim/ — simulation trajectories and summaries
 
-C0
+## Installation & Running
 
-bcap
-
-epsilon
-
-Output:
-
-MosquitoFitResult
-
-Saved in outputs/mosquito_fit/
-
-Stage 2: Disease Calibration
-Uses mosquito outputs and case data.
-
-Input:
-
-Mosquito artifacts
-
-Climate data
-
-Dengue cases
-
-Fitted parameters:
-
-phi
-
-ab, am, ah
-
-Transmission parameters
-
-Output:
-
-DiseaseFitResult
-
-Saved in outputs/disease_fit/
-
-Parameter Management
-All parameters are defined in:
-
-src/Core/Params.jl
-Fixed parameters come from literature.
-Only sensitive parameters are estimated.
-
-Calibration Method
-Model fitting uses nonlinear least squares:
-
-min_theta sum_i (Y_i - Yhat_i(theta))^2
-
-Implemented using Levenberg–Marquardt or Optimization.jl.
-
-Installation
-Clone the repository:
-
-git clone <repository-url>
+1. Clone the repo:
+```Bash 
+git clone <your-repo-url>
 cd Dengue-ODES
-Instantiate environment:
-
+```
+2. Install dependencies:
+```julia
 julia --project
 ] instantiate
-Running the Full Pipeline
-julia --project scripts/run_all.jl
-Testing
-julia --project
-] test
-Extending the Codebase
-Modify climate forcing:
-src/Core/Temperature.jl
+```
+3. Run the mosquito fit (with parallelism):
+```Bash
+JULIA_NUM_THREADS=8 julia scripts/run_mosquito_fit.jl
+```
 
-Add observation models:
-src/Observe/
+## Calibration Approach
+Mosquito stage — Nonlinear least squares via LHS + multithreading
+Objective:
+$[\argmin_{\theta} \sum_i \left( \text{MFAI}_i - \widehat{\text{MFAI}}_i(\theta) \right)^2]$
+where $θ = [C₀, bₖ, ϵ]$ and $ϵ$ is a climate dependent carrying capacity for the mosquito population.
+Disease stage — Sequential (uses mosquito equilibrium as input).
 
-Change mosquito biology:
-src/Models/Mosquito/RHS.jl
+## Contact
+For questions, collaboration, bug reports, or to discuss using/extending the code, please reach out:
 
-Add Bayesian inference:
-Replace Fit.jl with Turing.jl workflows
+Sophie Zhou: sophiezy@umich.edu
+Nicholas Litsas: nglitsas@umich.edu
 
-Reference
-Rauh et al. (2025)
-Assessing mosquito dynamics and dengue transmission in Foz do Iguaçu
-PLOS ONE 20(9): e0330902
+You can also open an issue on GitHub — we welcome feedback!
+
+
+## Reference
+Rauh CS, Araujo EC, Ganem F, Lana RM, Leandro AS, Martins CA, et al. (2025)
+Assessing mosquito dynamics and dengue transmission in Foz do Iguaçu, Brazil through an enhanced temperature-dependent mathematical model.
+PLOS ONE 20(9): e0330902.
+https://doi.org/10.1371/journal.pone.0330902
+text

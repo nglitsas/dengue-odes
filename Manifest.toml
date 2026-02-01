@@ -2,7 +2,7 @@
 
 julia_version = "1.12.1"
 manifest_format = "2.0"
-project_hash = "c80cc25bc2661e978013333837a3aab82e1665ce"
+project_hash = "78eb26bebdddb9a2a3ad5987290050a5239a2fc6"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -443,7 +443,7 @@ uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 version = "1.9.1"
 
 [[deps.DengueODES]]
-deps = ["CSV", "DataFrames", "DataInterpolations", "Dates", "DifferentialEquations", "LsqFit", "Optim", "Plots", "Statistics"]
+deps = ["CSV", "DataFrames", "DataInterpolations", "Dates", "DifferentialEquations", "ForwardDiff", "LsqFit", "Optim", "Plots", "Printf", "Statistics"]
 path = "."
 uuid = "3f4c8e9a-8c4e-4b5e-9f7b-1d6f8a3b5c21"
 version = "0.1.0"
@@ -1092,6 +1092,12 @@ version = "0.16.10"
     SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
     SymEngine = "123dc426-2d89-5057-bbad-38513e3affd8"
     tectonic_jll = "d7dd28d6-a5e6-559c-9131-7eb760cdacc5"
+
+[[deps.LatinHypercubeSampling]]
+deps = ["Random", "StableRNGs", "StatsBase", "Test"]
+git-tree-sha1 = "825289d43c753c7f1bf9bed334c253e9913997f8"
+uuid = "a5e1c1ea-c99a-51d3-a14d-a9a37257b02d"
+version = "1.9.0"
 
 [[deps.LayoutPointers]]
 deps = ["ArrayInterface", "LinearAlgebra", "ManualMemory", "SIMDTypes", "Static", "StaticArrayInterface"]
