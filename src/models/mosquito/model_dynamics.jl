@@ -13,71 +13,143 @@ using DifferentialEquations
 using ..Constants
 using ..Entomology
 
-export mosquito_ode!
-
-"""
-    mosquito_ode!(du, u, p, t)
-
-The Mosquito Capture Model (Eq 2).
-u[1] = A (Aquatic)
-u[2] = M (Adult Females)
-u[3] = Trapped (Cumulative)
-
-p = (C0, b_cap, epsilon, temp_interp)
-"""
-
-Base.@kwdef struct MosquitoModelParams
-    Nⱼ::Float64      # number of mosquito traps (not used in ODE below yet) X
-    H₀::Float64      # number of households (not used in ODE below yet) X
-    j::Float64       # trap capture rate (not used in ODE below yet) X
-
-    k::Float64       # fraction hatchlings female X
-    δₜ::Float64      # oviposition rate X
-    μₘₜ::Float64     # adult mosquito mortality X
-
-    μₐₜ::Float64     # aquatic mortality X
-    γₘₜ::Float64     # aquatic transition rate (aquatic -> adult susceptible) X
-
-    C::Float64       # mosquito carrying capacity X
-    C₀::Float64      # initial carrying capacity (unused in RHS below)
-    bₖ::Float64      # carrying capacity coeff (unused in RHS below)
-    ϵ::Float64       # carrying capacity threshold (unused in RHS below)
-    
-end
+export MosquitoModelParams, default_u0, CaptureModel!, IX_A, IX_M, IX_T
 
 # State indices (u is length 3)
-const IX_A  = 1
-const IX_M  = 2
-const IX_T  = 3
+const IX_A  = 1 # Aquatic
+const IX_M  = 2 # Adult Females
+const IX_T  = 3 # Cumulative Trapped
 
 """
-Default initial condition vector u0 = [A_0, M_0, T_0].
+    MosquitoModelParams{I}
 
-Can be overriden via keyword args.
+Parameters for the mosquito capture model.
+Time-varying rates are calculated dynamically using `temp_interp`.
 """
+Base.@kwdef struct MosquitoModelParams{I}
+    # --- Fixed / Environmental Constants ---
+    Nⱼ = Constants.N_TRAPS      # Number of mosquito traps (N_tr)
+    H₀ =  Constants.N_HOUSEHOLDS   # Number of households (H_o)
+    j = Constants.ALPHA     # Trap capture efficiency (alpha)
+    k = Constants.K     # Fraction hatchlings female
 
-function default_u0(p::MosquitoModelParams;
-    A_0::Real = 0.2p.C,
-    M_0::Real = 0.3p.C,
-    T_0::Real = 0.0,
-   
-)
-    
-    return Float64[
-        A_0, M_0, T_0 
-    ]
+    # --- Fitting Parameters for Carrying Capacity C(t) ---
+    C₀ = 1.33     # Initial carrying capacity (from paper)
+    bₖ = 0.3165      # Growth rate (b_cap) (from paper)
+    ϵ = 909       # Time threshold (epsilon) (from paper)
+
+    # --- Forcing Data ---
+    # Holds the interpolation object (e.g., LinearInterpolation)
+    # This allows us to get Temperature T(t) inside the solver
+    temp_interp::I   
 end
 
+"""
+Default initial condition vector u0 = [A, M, T].
+"""
+function default_u0(p::MosquitoModelParams;
+    A₀::Real = 0.85 * p.C₀, # From paper results
+    M₀::Real = 0.7 * Constants.POPULATION, # Scaled to city population
+    T₀::Real = 0.0
+)
+    return Float64[A₀, M₀, T₀]
+end
+
+"""
+    CaptureModel!(du, u, p, t)
+
+In-place ODE definition.
+Dynamically calculates biological rates based on temperature at time t.
+"""
 function CaptureModel!(du, u, p::MosquitoModelParams, t)
     A, M, T = u
 
-    # transmission rate
+    # --- 1. Get Dynamic Rates ---
     
+    # Calculate all biological rates for current temp T(t)
+    # Returns: (oviposition, aquatic_transition, aquatic_mortality, adult_mortality)
+    δₜ, γₘₜ, μₐₜ, μₘₜ = Entomology.get_rates(t, p.temp_interp)
 
-    # mosquitoes
-    du[IX_A] = k*δₜ*(1 - A/C)*M - γₘₜ*A - μₐₜ*A
-    du[IX_M] = γₘₜ*A - μₘₜ*M - T
-    du[IX_T] = j*(Nⱼ/H₀)*M
+    # Calculate Carrying Capacity C(t)
+    C_t = Entomology.get_carrying_capacity(t, p.C₀, p.bₖ, p.ϵ)
     
+    # Safety clamp for C(t)
+    C_t = max(C_t, 1e-6)
+
+    # --- 2. Flows ---
+
+    # Trapping flow: removes from M, adds to T
+    # Rate = j * (Traps / Households) * M
+    trapping_flow = p.j * (p.Nⱼ / p.H₀) * M
+
+    # Emergence: Aquatic -> Adult
+    emergence = γₘₜ * A
+
+    # Oviposition (Births)
+    # Logistic term: 1 - A/C(t)
+    logistic_factor = 1.0 - (A / C_t)
+    
+    # Ensure no births if A > C (standard logistic constraint)
+    effective_birth_rate = p.k * δₜ * max(0.0, logistic_factor)
+    oviposition = effective_birth_rate * M
+
+    # --- 3. Equations ---
+
+    # dA/dt = Births - Emergence - Death
+    du[IX_A] = oviposition - emergence - (μₐₜ * A)
+
+    # dM/dt = Emergence - Death - Trapped
+    du[IX_M] = emergence - (μₘₜ * M) - trapping_flow
+
+    # dT/dt = Accumulation of trapped mosquitoes
+    du[IX_T] = trapping_flow
+
     return nothing
 end
+
+
+"""
+    compute_mfai(sol, t_points, trap_idx, N_traps)
+
+Converts a cumulative trapped state T(t) from an ODE solution into 
+discrete MFAI values (Mosquitoes per Trap) over the intervals defined by t_points.
+
+Arguments:
+- `sol`: The DifferentialEquations solution object.
+- `t_points`: Vector of times to evaluate (e.g., data collection days).
+- `trap_idx`: The index of the Trapped state in the solution vector (usually 3).
+- `N_traps`: The number of traps used to normalize the count.
+"""
+function compute_mfai_theo(sol, t_points, trap_idx, N_traps)
+    mfai_values = zeros(length(t_points))
+    
+    # We assume the cumulative count starts at 0 at t=0.
+    # We need to track the previous count to get the delta.
+    prev_cum_trapped = 0.0 
+    
+    # If the first data point isn't t=0, we need to know T at the start of that interval.
+    # However, for this specific dataset, we usually just want the delta from 
+    # the *previous data point* in the list.
+    
+    for i in eachindex(t_points)
+        t_curr = t_points[i]
+        
+        # Get cumulative trapped at current time
+        current_cum = sol(t_curr)[trap_idx]
+        
+        # Calculate Delta (New captures since last point)
+        newly_trapped = current_cum - prev_cum_trapped
+        
+        # Normalize
+        mfai_values[i] = newly_trapped / N_traps
+        
+        # Update previous for next iteration
+        prev_cum_trapped = current_cum
+    end
+    
+    return mfai_values
+end
+
+
+end # module
+

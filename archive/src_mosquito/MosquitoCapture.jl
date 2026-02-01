@@ -5,7 +5,7 @@ module MosquitoCapture
 
 using DifferentialEquations
 using CSV, DataFrames
-using Optim 
+using Optim
 
 include("mosquito_model.jl")
 include("mosquito_simulation.jl")

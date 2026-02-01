@@ -1,4 +1,4 @@
-Data,daily_precipitation-mm,temp_max-celsius,temp_min-celsius,temp_mean-celsius,mean_relative_humidity-%,mean_wind_speed-m_per_s
+Data,daily_precipitation-mm,temp_max-celsius,temp_min-celsius,temp_mean_celsius,mean_relative_humidity-%,mean_wind_speed-m_per_s
 2010-01-01,0.0,31.1,23.9,26.7,72.1,1.7
 2010-01-02,2.2,32.9,23.8,27.2,75.3,1.3
 2010-01-03,0.0,32.3,25.6,28.4,73.2,1.7
