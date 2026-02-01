@@ -62,22 +62,32 @@ println("   Fitting window (global t): $(minimum(observed_times)) to $(maximum(o
 # =======================================================
 # 3. RUN PARAMETER FITTING
 # =======================================================
+println("Julia started with $(Threads.nthreads()) threads available")
 println("\n[3] Fitting model parameters...")
+training_days = maximum(observed_times) - minimum(observed_times)
 
 fit_result = Fitting.fit_mosquito_model(
     observed_times,
     observed_mfai,
     temp_interp;                 # GLOBAL-time temp interpolator
-    training_days = 365.0,
-    initial_guess = [1.0, 0.3, 800.0],   # epsilon is STILL "days since t_start" inside your C(t)
+    training_days = Float64(training_days),  # use all data for fitting
+    initial_guess = [1.0, 0.3, observed_times[1]+800],   
     lower_bounds  = [0.1, 0.0, 0.0],
-    upper_bounds  = [5.0, 1.2, 2000.0]
+    upper_bounds  = [5.0, 1.2, observed_times[1] + 3000.0],
+    method = :lhs, 
 )
 
 fitted_params = fit_result.param
-println("   Converged:  ", fit_result.converged)
 println("   Fitted Params [C₀, b_cap, ϵ]: ", fitted_params)
-println("   Residual SSE: ", sum(fit_result.resid .^ 2))
+
+if hasproperty(fit_result, :converged)
+    # LsqFit result
+    println("   Converged:  ", fit_result.converged)
+    println("   Residual SSE: ", sum(fit_result.resid .^ 2))
+else
+    # LHS result (your NamedTuple)
+    println("   Residual SSE: ", fit_result.resid)  # already SSE
+end
 
 # =======================================================
 # 4. RUN SIMULATION & REPORT (WITH FITTED PARAMS)

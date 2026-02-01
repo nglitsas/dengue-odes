@@ -10,6 +10,7 @@ rates are imported from ../entomology.jl.
 module MosquitoModelDynamics
 
 using DifferentialEquations
+using ForwardDiff
 using ..Constants
 using ..Entomology
 
@@ -86,9 +87,18 @@ Dynamically calculates biological rates based on temperature at time t.
 """
 function CaptureModel!(du, u, p::MosquitoModelParams, t)
     A, M, T = u
-    if t < p.t_start + 0.00001
-        @info "Step Check" t Aquatic=A Adults=M
-    end
+    # if t < p.t_start + 0.00001
+    #     @info "Step Check" t Aquatic=A Adults=M
+    # end
+    #  # --- Input sanity (BEFORE using A,M,T) ---
+    # @assert all(x -> isfinite(ForwardDiff.value(x)), u) "u not finite at t=$t"
+
+    # δₜ, γₘₜ, μₐₜ, μₘₜ = Entomology.get_rates(t, p.temp_interp)
+
+    # @assert isfinite(ForwardDiff.value(δₜ))  "δₜ not finite at t=$t"
+    # @assert isfinite(ForwardDiff.value(γₘₜ)) "γₘₜ not finite at t=$t"
+    # @assert isfinite(ForwardDiff.value(μₐₜ)) "μₐₜ not finite at t=$t"
+    # @assert isfinite(ForwardDiff.value(μₘₜ)) "μₘₜ not finite at t=$t"
 
     # --- 1. Get Dynamic Rates ---
     
@@ -96,16 +106,16 @@ function CaptureModel!(du, u, p::MosquitoModelParams, t)
     # Returns: (oviposition, aquatic_transition, aquatic_mortality, adult_mortality)
     δₜ, γₘₜ, μₐₜ, μₘₜ = Entomology.get_rates(t, p.temp_interp)
 
-    # 2. EMERGENCY PRINT
-    if t < p.t_start + 0.0001
-        println("--- ENTOMOLOGY CHECK ---")
-        println("  Temp: $(p.temp_interp(t))")
-        println("  Oviposition (δ): $δₜ")
-        println("  Transition (γ): $γₘₜ")
-        println("  Larval Death (μ_a): $μₐₜ")
-        println("  Adult Death (μ_m): $μₘₜ")
-        println("------------------------")
-    end
+    # # 2. EMERGENCY PRINT
+    # if t < p.t_start + 0.0001
+    #     println("--- ENTOMOLOGY CHECK ---")
+    #     println("  Temp: $(p.temp_interp(t))")
+    #     println("  Oviposition (δ): $δₜ")
+    #     println("  Transition (γ): $γₘₜ")
+    #     println("  Larval Death (μ_a): $μₐₜ")
+    #     println("  Adult Death (μ_m): $μₘₜ")
+    #     println("------------------------")
+    # end
 
     # Calculate Carrying Capacity C(t)
     C_t = Entomology.get_carrying_capacity(t, p.C₀, p.bₖ, p.ϵ, p.t_start)
@@ -138,11 +148,11 @@ function CaptureModel!(du, u, p::MosquitoModelParams, t)
     # dT/dt = Accumulation of trapped mosquitoes
     du[IX_T] = trapping_flow
 
-    # Check for NaNs
-    if isnan(du[IX_A]) || isnan(du[IX_M]) || isinf(du[IX_A])
-        @error "Explosion detected!" t u du_A=du[IX_A] C_t p
-        error("Solver halted due to math explosion")
-    end
+    # # Check for NaNs
+    # if any(x -> !isfinite(ForwardDiff.value(x)), du)
+    #     @error "Explosion detected!" t u du C_t δₜ γₘₜ μₐₜ μₘₜ
+    #     error("Solver halted due to math explosion")
+    # end
 
     return nothing
 end
