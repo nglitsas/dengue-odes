@@ -48,9 +48,27 @@ function get_weather_data(; force_process::Bool=false)::DataFrame
 end
 
 function get_temperature_interpolator(weather_df::DataFrame)
+    # 1. Sort by date to ensure monotonic time
     sort!(weather_df, :date)
-    t_vals = date_to_t.(weather_df.date)
-    temp_vals = Float64.(weather_df.temp)
+
+    # 2. Filter out missing data to prevent Float conversion errors
+    # (DataInterpolations requires concrete Float64 arrays)
+    clean_df = dropmissing(weather_df, [:date, :temp])
+
+    if nrow(clean_df) < nrow(weather_df)
+        println("Warning: Dropped $(nrow(weather_df) - nrow(clean_df)) rows with missing temperature data.")
+    end
+
+    # 3. Convert time using your external utility
+    # Ensure this returns a Vector{Float64} representing Days
+    t_vals = Float64.(date_to_t.(clean_df.date))
+    
+    # 4. Extract Temps
+    temp_vals = Float64.(clean_df.temp)
+
+    # 5. Create Interpolator
+    # We use LinearInterpolation. 
+    # Note: If the solver steps outside the date range, this might throw an error.
     return LinearInterpolation(temp_vals, t_vals)
 end
 

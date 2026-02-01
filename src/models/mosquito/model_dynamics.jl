@@ -13,7 +13,7 @@ using DifferentialEquations
 using ..Constants
 using ..Entomology
 
-export MosquitoModelParams, default_u0, CaptureModel!, IX_A, IX_M, IX_T
+export MosquitoModelParams, build_params, default_u0, CaptureModel!, IX_A, IX_M, IX_T
 
 # State indices (u is length 3)
 const IX_A  = 1 # Aquatic
@@ -42,6 +42,25 @@ Base.@kwdef struct MosquitoModelParams{I}
     # Holds the interpolation object (e.g., LinearInterpolation)
     # This allows us to get Temperature T(t) inside the solver
     temp_interp::I   
+end
+
+"""
+    build_params(temp_interp; fitted_params=nothing)
+
+Create MosquitoModelParams using defaults, optionally overriding [C₀, bₖ, ϵ].
+"""
+function build_params(temp_interp; fitted_params::Union{Nothing,AbstractVector{<:Real}}=nothing)
+    if fitted_params === nothing
+        return MosquitoModelParams(temp_interp=temp_interp)  # uses defaults from @kwdef
+    end
+    @assert length(fitted_params) == 3 "Expected fitted_params = [C₀, bₖ, ϵ]"
+    C0, bk, eps = fitted_params
+    return MosquitoModelParams(
+        C₀ = Float64(C0),
+        bₖ = Float64(bk),
+        ϵ  = Float64(eps),
+        temp_interp = temp_interp
+    )
 end
 
 """

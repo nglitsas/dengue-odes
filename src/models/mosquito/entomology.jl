@@ -11,8 +11,8 @@ end
 
 function get_carrying_capacity(t, C₀, b_cap, ϵ)
     dt = t - ϵ
-    ramp_active = smooth_heaviside(dt, 2.0)
-    return C₀ + b_cap * ramp_active
+    u_t = smooth_heaviside(dt, 2.0)
+    return C₀ + b_cap * u_t * dt
 end
 
 # --- 2. Biological Rates (Polynomials) ---
