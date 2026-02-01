@@ -95,6 +95,7 @@ function fit_mosquito_model(observed_times::Vector{Float64},
     train_mask = observed_times .<= (t0 + training_days)
     time_train = observed_times[train_mask]
     data_train = observed_mfai[train_mask]
+    t_start = time_train[1]
 
     # 2. SETUP BASELINE
     base_params = MosquitoModelDynamics.MosquitoModelParams(
@@ -106,7 +107,7 @@ function fit_mosquito_model(observed_times::Vector{Float64},
     )
 
     warmup = 0.0
-    t_start = time_train[1]                  # likely 0.0
+                      # likely 0.0
     t_end   = maximum(time_train) + 2.0
 
     tspan = (t_start, t_end + warmup)
