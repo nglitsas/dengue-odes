@@ -21,7 +21,7 @@ function get_weather_data(; force_process::Bool=false)::DataFrame
         println("Loading processed weather data from: $PROCESSED_PATH")
         df = CSV.read(PROCESSED_PATH, DataFrame)
         df.date = Date.(df.date)
-        return df
+        return df  # ✓ Now includes t_vals column from CSV
     end
 
     println("Processing raw weather data from: $RAW_PATH")
@@ -36,11 +36,15 @@ function get_weather_data(; force_process::Bool=false)::DataFrame
     rename!(df, "Data" => "date", "temp_mean_celsius" => "temp")
     df.date = Date.(df.date)
     
-    # 3. Sort & Select
+    # 3. Sort
     sort!(df, :date)
-    select!(df, :date, :temp)
+    
+    # 4. Add t_vals column (days since 2000)
+    df.t_vals = Float64.(date_to_t.(df.date))
+    
+    select!(df, :date, :t_vals, :temp)  # ✓ Include t_vals
 
-    # 4. Save Processed Data
+    # 5. Save Processed Data
     CSV.write(PROCESSED_PATH, df)
     println("Saved processed weather data to: $PROCESSED_PATH")
 
@@ -48,31 +52,25 @@ function get_weather_data(; force_process::Bool=false)::DataFrame
 end
 
 function get_temperature_interpolator(weather_df::DataFrame)
-    # 1. Sort
-    sort!(weather_df, :date)
+    # 1. Sort by t_vals
+    sort!(weather_df, :t_vals)
 
     # 2. Filter missing
-    clean_df = dropmissing(weather_df, [:date, :temp])
+    clean_df = dropmissing(weather_df, [:t_vals, :temp])
 
     if nrow(clean_df) < nrow(weather_df)
-        println("Warning: Dropped $(nrow(weather_df) - nrow(clean_df)) rows with missing temperature data.")
+        println("Warning: Dropped $(nrow(weather_df) - nrow(clean_df)) rows with missing data.")
     end
 
-    # 3. Convert time using TimeUtil (Global Time: Days since 2000)
-    sort!(clean_df, :date)
-    t_vals = Float64.(date_to_t.(clean_df.date))
+    # 3. Extract vectors
+    clean_df.t_vals = Float64.(clean_df.t_vals)
+    clean_df.temp = Float64.(clean_df.temp)
+    sort!(clean_df, :t_vals)
     
-    # 4. Extract Temps
-    temp_vals = Float64.(clean_df.temp)
-    
-    @assert !any(isnan, temp_vals) "Weather data contains NaNs!"
-    @assert !any(isnan, t_vals)    "Time values contain NaNs!"
+    @assert !any(isnan, clean_df.temp) "Weather data contains NaNs!"
+    @assert !any(isnan, clean_df.t_vals)    "Time values contain NaNs!"
 
-    # 5. Create Interpolator (Fixed Typo)
-    return LinearInterpolation(
-        temp_vals, 
-        t_vals, 
-    )
+    # 4. Create Interpolator
+    return QuadraticSpline(clean_df.temp, clean_df.t_vals)
 end
-
-end # module
+end 

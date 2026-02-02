@@ -102,9 +102,9 @@ function fit_mosquito_model(observed_times::Vector{Float64},
                             observed_mfai::Vector{Float64},
                             temp_interp;
                             training_days::Float64 = 365.0,
-                            initial_guess = [1.27e5, 0.31, 900.0],  # ✅ Updated C₀
+                            initial_guess = [1.27, 0.31, 900.0],  # ✅ Updated C₀
                             lower_bounds = [1e4, 0.0, 0.0],         # ✅ Updated bounds
-                            upper_bounds = [3e5, 1.5, 1820.0],      # ✅ Updated bounds
+                            upper_bounds = [3e6, 1.5, 1820.0],      # ✅ Updated bounds
                             method::Symbol = :lhs,
                             n_lhs_samples::Int = 2000)
     """

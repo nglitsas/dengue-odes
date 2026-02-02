@@ -40,7 +40,6 @@ function CaptureModel_Fast(u, p, t)
     # ✅ FIX: Entomology.get_carrying_capacity should return TOTAL capacity
     # not per-household density. See corrected entomology.jl
     C_total = Entomology.get_carrying_capacity(t, p.C₀, p.bₖ, p.ϵ, p.t_start)
-    C_total = max(C_total, 1e-6)
 
     # 3. Trapping Physics
     trap_rate = Constants.ALPHA * (Constants.N_TRAPS / Constants.N_HOUSEHOLDS)
@@ -89,8 +88,6 @@ function compute_mfai_theo(sol, t_steps)
         # Total mosquitoes caught in this interval (across all traps)
         delta_catch = T_vals[i] - T_vals[i-1]
         
-        # ✅ CORRECTED: Just divide by number of traps
-        # The paper explicitly states this is NOT per day
         mfai[i] = delta_catch / Constants.N_TRAPS
     end
     

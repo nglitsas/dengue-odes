@@ -113,10 +113,13 @@ function plot_mosquito_simulation(trap_df::DataFrame, temp_interp;
                                   abstol=1e-6)
     
     # Run the simulation
-    sim_df = Simulate.run_mosquito_simulation(
+    results = Simulate.run_mosquito_simulation(
         trap_df, temp_interp; 
         fitted_params=fitted_params,
     )
+
+    sim_df = results.sim
+    rates_df = results.rates
 
     # Plot 1: Dynamics
     p1 = plot(sim_df.t, sim_df.mfai_pred, 
@@ -136,12 +139,16 @@ function plot_mosquito_simulation(trap_df::DataFrame, temp_interp;
         xlabel="Time (t)", ylabel="Model - Obs",
         title="Fit Residuals")
     hline!(p2, [0.0], color=:black, ls=:dash, label="")
+    
+    p_rates = plot_biological_rates(rates_df)
 
     return (
         sim = sim_df,
         sim_plot = p1,
-        resid_plot = p2
+        resid_plot = p2,
+        rates_plot = p_rates
     )
+    
 end
 
 # ==========================================
@@ -176,6 +183,62 @@ function summarize_mosquito_fit(trap_df, sim_df)
         MAE = mae,
         Correlation = r_val
     )
+end
+
+"""
+    plot_biological_rates(df_rates)
+
+Generates a multi-panel plot showing how climate drives mosquito biology.
+"""
+function plot_biological_rates(df_rates)
+    dates = TimeUtil.t_to_date.(df_rates.t)
+
+    # Plot 1a: Full range (log scale)
+    p1a = plot(dates, df_rates.capacity, 
+               title="Carrying Capacity (Log Scale)", 
+               ylabel="Total Population", 
+               label="Capacity", 
+               color=:green, lw=2,
+               yscale=:log10)
+    
+    # Plot 1b: Zoom on early times
+    early_idx = df_rates.t .<= 7500
+    p1b = plot(dates[early_idx], df_rates.capacity[early_idx],
+               title="Carrying Capacity (Early, Linear)", 
+               ylabel="Total Population", 
+               label="Capacity", 
+               color=:green, lw=2)
+
+    # Plot 2a: Oviposition (SEPARATE)
+    p2a = plot(dates, df_rates.oviposition_rate,
+               title="Oviposition Rate", 
+               ylabel="δ (eggs/female/day)", 
+               label="Oviposition",
+               color=:blue, lw=1.5)
+
+    # Plot 2b: Emergence (SEPARATE) 
+    p2b = plot(dates, df_rates.emergence_rate,
+               title="Emergence Rate", 
+               ylabel="γₘ (1/day)", 
+               label="Emergence",
+               color=:orange, lw=1.5)
+
+    # Plot 3a: Aquatic Mortality (SEPARATE)
+    p3a = plot(dates, df_rates.mu_a,
+               title="Aquatic Mortality", 
+               ylabel="μₐ (1/day)", 
+               label="Aquatic",
+               color=:red, lw=1.5)
+
+    # Plot 3b: Adult Mortality (SEPARATE)
+    p3b = plot(dates, df_rates.mu_m,
+               title="Adult Mortality", 
+               ylabel="μₘ (1/day)", 
+               label="Adult",
+               color=:purple, lw=1.5)
+
+    return plot(p1a, p1b, p2a, p2b, p3a, p3b, 
+                layout=(6,1), size=(800, 1800), xlabel="Date")
 end
 
 function mosquito_mfai_comp_table(trap_df::DataFrame, sim_df::DataFrame)

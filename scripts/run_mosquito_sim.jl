@@ -43,6 +43,54 @@ weather_subset = filter(row -> (sim_start_date - buffer) <= row.date <= (sim_end
 
 # D. Create the Interpolator with the SUBSET
 temp_interp = Temperature.get_temperature_interpolator(weather_subset)
+println("Interpolator Time Range: ", sim_start_date, " to ", sim_end_date)
+println("Value at start: ", temp_interp(DengueODES.Shared.TimeUtil.date_to_t(sim_start_date)))
+
+# using Plots
+
+# # 1. Define the fine-grained time range for plotting
+# # We convert the dates to numerical 't' values using your TimeUtil
+# t_plot_start = DengueODES.Shared.TimeUtil.date_to_t(sim_start_date)
+# t_plot_end   = DengueODES.Shared.TimeUtil.date_to_t(sim_end_date)
+
+# # Create a range of t values (e.g., every 0.1 days for a smooth curve)
+# t_range = range(t_plot_start, t_plot_end, length=1000)
+
+# # 2. Evaluate the interpolator at these points
+# # This is exactly what the ODE solver "sees" during the simulation
+# temp_values = [temp_interp(t) for t in t_range]
+
+# # 3. Convert t_range back to Dates for a readable X-axis
+# plot_dates = [DengueODES.Shared.TimeUtil.t_to_date(t) for t in t_range]
+
+# # 4. Create the plot
+# p_temp = plot(
+#     plot_dates, 
+#     temp_values,
+#     title  = "Temperature Forcing ($sim_start_date to $sim_end_date)",
+#     ylabel = "Temperature (°C)",
+#     xlabel = "Date",
+#     label  = "Linear Interpolation",
+#     lw     = 2,
+#     color  = :orange,
+#     legend = :outertopright,
+#     size   = (900, 400)
+# )
+
+# # Optional: Overlay the raw weather station data points to check accuracy
+# scatter!(
+#     p_temp,
+#     weather_subset.date,
+#     weather_subset.temp,
+#     label = "Weather Station Data",
+#     color = :black,
+#     markersize = 2,
+#     alpha = 0.5
+# )
+
+# # Display or save the plot
+# display(p_temp)
+# savefig("outputs/mosquito_sim/temp_check.png")
 
 # -------------------------------------------------------
 # 2. Run Simulation / Fit
@@ -63,6 +111,7 @@ println("Saving outputs...")
 
 savefig(results.sim_plot, "outputs/mosquito_sim/sim_plot.png")
 savefig(results.resid_plot, "outputs/mosquito_sim/sim_resids_plot.png")
+savefig(results.rates_plot, "outputs/mosquito_sim/sim_rates_plot.png")
 
 # Calculate summary stats
 stats = Report.summarize_mosquito_fit(trap_df, results.sim)

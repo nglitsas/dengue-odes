@@ -81,7 +81,6 @@ function get_trap_data(; filename::String = "raw/mosq_aaeg_trap-2017_2022.csv",
     else
         agg.mfai_obvs = Float64.(agg.trapped) ./ 1.0
     end
-
     return agg
 end
 
