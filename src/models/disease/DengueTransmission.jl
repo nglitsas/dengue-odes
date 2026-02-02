@@ -21,7 +21,6 @@ using .EpidemEnto
 
 # 3. Include Core Logic
 include("model.jl")
-using .DengueModel
 
 
 

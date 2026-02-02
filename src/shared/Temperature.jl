@@ -72,7 +72,6 @@ function get_temperature_interpolator(weather_df::DataFrame)
     return LinearInterpolation(
         temp_vals, 
         t_vals, 
-        extrapolation = ExtrapolationType.Constant
     )
 end
 

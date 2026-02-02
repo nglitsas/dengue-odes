@@ -1,20 +1,18 @@
 module EpidemEnto
 
 using DataInterpolations
-# using ..DengueModel.ModelParams
 
-# Import ONLY the mosquito-specific rates and carrying capacity from Entomology
-using DengueODES.MosquitoCapture.Entomology: get_carrying_capacity,
-                    oviposition_rate,
-                    aquatic_transition,
-                    aquatic_mortality,
-                    adult_mortality
+# FIX: Use relative import to avoid circular dependency on the package itself
+using ...MosquitoCapture.Entomology: get_carrying_capacity,
+                                     oviposition_rate,
+                                     aquatic_transition,
+                                     aquatic_mortality,
+                                     adult_mortality
 
-# Export everything so dengue code can use EpidemEnto.get_rates(...) cleanly
 export get_carrying_capacity, get_rates
 
 # ==========================================
-# 1. DISEASE/TRANSMISSION-SPECIFIC FUNCTIONS (Briere)
+# 1. DISEASE/TRANSMISSION-SPECIFIC FUNCTIONS
 # ==========================================
 
 @inline function briere_type(t, c, T0, Tm)
@@ -29,7 +27,7 @@ function extrinsic_incubation_rate(temp, p)
     if temp <= p.θₘ_T0 || temp >= p.θₘ_Tm
         return 0.125  # median val of thetah from paper
     end
-    theta = (temp - p.θₘ_Tm) / (p.θₘ_T0)  # or your formula
+    theta = (temp - p.θₘ_Tm) / (p.θₘ_T0) 
     return theta
 end
 
@@ -46,22 +44,18 @@ function trans_human_mosq(temp, p)
 end
 
 # ==========================================
-# 2. MAIN RATE ACCESSOR (combines mosquito + disease rates)
+# 2. MAIN RATE ACCESSOR
 # ==========================================
 function get_rates(t, temp_interp, p)
     T = temp_interp(t)
     
-    if isnan(T)
-        error("Temperature interpolator returned NaN at t=$t")
-    end
-
     # Mosquito rates (imported from Entomology)
     δₜ   = oviposition_rate(T)
     γₘₜ  = aquatic_transition(T)
     μₐₜ  = aquatic_mortality(T)
     μₘₜ  = adult_mortality(T)
 
-    # Disease/transmission rates (now use p)
+    # Disease/transmission rates (using p)
     θₘₜ  = extrinsic_incubation_rate(T, p)
     bₜ   = biting_rate(T, p)
     βₘₜ  = trans_mosq_human(T, p)

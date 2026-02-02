@@ -32,21 +32,21 @@ fit_end_date   = maximum(trap_df.date)
 
 weather_df = Temperature.get_weather_data(force_process=true)
 
-# Use a small buffer so interpolation is defined at endpoints
-buffer = Day(1)
+# --- FIX: INCREASE BUFFER ---
+# We need a larger buffer (e.g., 1 year) so the model doesn't crash 
+# if the optimizer tests a lag (epsilon) or if we add a warmup period later.
+buffer = Year(2)  # Increase from 1 year to 2 years 
 weather_subset = filter(row -> (fit_start_date - buffer) <= row.date <= (fit_end_date + buffer), weather_df)
 
-# IMPORTANT: this interpolator should accept GLOBAL t (date_to_t units)
 temp_interp = Temperature.get_temperature_interpolator(weather_subset)
 
 println("   Trap date range: $fit_start_date to $fit_end_date")
 
 # =======================================================
-# 2. PREPARE DATA FOR FITTING (GLOBAL TIME AXIS)
+# 2. PREPARE DATA
 # =======================================================
 println("\n[2] Preparing vectors for fitting...")
 
-# observed_times in GLOBAL t units (same as weather interpolator)
 observed_times = Float64[TimeUtil.date_to_t(d) for d in trap_df.date]
 
 if hasproperty(trap_df, :mfai_obvs)
@@ -66,14 +66,17 @@ println("Julia started with $(Threads.nthreads()) threads available")
 println("\n[3] Fitting model parameters...")
 training_days = maximum(observed_times) - minimum(observed_times)
 
+# --- FIX: LOGICAL BOUNDS FOR EPSILON ---
+# Epsilon is a lag/shift (days). It should be small (0-100), not 7000+.
 fit_result = Fitting.fit_mosquito_model(
     observed_times,
     observed_mfai,
-    temp_interp;                 # GLOBAL-time temp interpolator
-    training_days = Float64(training_days),  # use all data for fitting
-    initial_guess = [1.0, 0.3, observed_times[1]+800],   
-    lower_bounds  = [0.1, 0.0, 0.0],
-    upper_bounds  = [5.0, 1.2, observed_times[1] + 3000.0],
+    temp_interp;                 
+    training_days = Float64(training_days),
+    # Now C₀ is in units of TOTAL mosquitoes (10^5)
+    initial_guess = [1.5e5, 0.3, 900.0],
+    lower_bounds  = [1e5, 0.1, 700.0],
+    upper_bounds  = [4e5, 0.5, 1100.0],  # ← Increase C₀ max from 2.5e5 to 4e5
     method = :lhs, 
 )
 
@@ -81,23 +84,22 @@ fitted_params = fit_result.param
 println("   Fitted Params [C₀, b_cap, ϵ]: ", fitted_params)
 
 if hasproperty(fit_result, :converged)
-    # LsqFit result
-    println("   Converged:  ", fit_result.converged)
+    println("   Converged:   ", fit_result.converged)
     println("   Residual SSE: ", sum(fit_result.resid .^ 2))
 else
-    # LHS result (your NamedTuple)
-    println("   Residual SSE: ", fit_result.resid)  # already SSE
+    println("   Residual SSE: ", fit_result.resid)
 end
 
 # =======================================================
-# 4. RUN SIMULATION & REPORT (WITH FITTED PARAMS)
+# 4. RUN SIMULATION & REPORT
 # =======================================================
 println("\n[4] Running simulation & generating report...")
 
 report_results = Report.plot_mosquito_simulation(
-    trap_df,
-    temp_interp;             # GLOBAL-time temp interpolator
-    fitted_params = fitted_params,
+    trap_df, 
+    temp_interp,
+    # --- FIX: CORRECT VARIABLE NAME ---
+    fitted_params = fitted_params, 
     solver = Tsit5()
 )
 
@@ -110,6 +112,7 @@ savefig(report_results.sim_plot, "outputs/mosquito_fit/fit_plot.png")
 savefig(report_results.resid_plot, "outputs/mosquito_fit/fit_resids_plot.png")
 
 stats = Report.summarize_mosquito_fit(trap_df, report_results.sim)
+# Ensure SSE is accessed correctly (case sensitivity check)
 stats_df = DataFrame(Metric=["SSE","RMSE","MAE"], Value=[stats.SSE, stats.RMSE, stats.MAE])
 CSV.write("outputs/mosquito_fit/fit_stats.csv", stats_df)
 

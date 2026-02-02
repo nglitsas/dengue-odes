@@ -108,11 +108,17 @@ function summarize_dengue_fit(case_df, sim_results, reporting_rate=1.0)
     obs = Float64.(obs_subset.notified)
     pred = sim_results.incidence[sim_indices] .* reporting_rate
 
-    mse = mean((obs .- pred).^2)
+    sse  = sum((obs .- pred).^2)
+    mse  = sse / length(obs)
     rmse = sqrt(mse)
-    mae = mean(abs.(obs .- pred))
+    mae  = mean(abs.(obs .- pred))
 
-    return (RMSE=rmse, MAE=mae, N=length(obs))
+    return (
+        N    = length(obs),
+        SSE  = sse,           
+        RMSE = rmse,
+        MAE  = mae
+    )
 end
 
 end # module

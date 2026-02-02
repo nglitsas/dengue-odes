@@ -77,20 +77,33 @@ println("Done! Results saved to outputs/mosquito_sim/")
 
 # ... (after savefig lines) ...
 
-# === DIAGNOSTIC: Find the Explosion Date ===
-# FIX: Access .sim.mfai_pred (nested inside results)
-residuals = abs.(results.sim.mfai_pred .- trap_df.mfai_obvs)
+# -------------------------------------------------------
+# 4. DIAGNOSTIC: Find the Explosion Date
+# -------------------------------------------------------
+println("\n--- RUNNING DIAGNOSTICS ---")
 
+# 1. Create interpolation from the daily simulation (Length ~2131)
+interp_model = LinearInterpolation(results.sim.mfai_pred, results.sim.t)
+
+# 2. Extract model values ONLY at the dates where we have trap data (Length 36)
+model_at_traps = [interp_model(t) for t in trap_df.t]
+
+# 3. NOW calculate residuals (Length 36 vs Length 36) -> No DimensionMismatch!
+residuals = abs.(model_at_traps .- trap_df.mfai_obvs)
+
+# 4. Find the worst day
 max_val, idx = findmax(residuals)
 worst_date = trap_df.date[idx]
 
-# Get the temperature for that specific day
+# 5. Get temperature context
 worst_date_t = DengueODES.Shared.TimeUtil.date_to_t(worst_date)
 worst_temp = temp_interp(worst_date_t)
 
-println("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-println("!!! EXPLOSION DETECTED !!!")
-println("Worst Date:       $worst_date")
-println("Residual Size:    $max_val")
-println("Temp on that day: $worst_temp °C")
+println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+println("!!! LARGEST DISCREPANCY DETECTED !!!")
+println("Date:             $worst_date")
+println("Observed MFAI:    $(round(trap_df.mfai_obvs[idx], digits=4))")
+println("Model MFAI:       $(round(model_at_traps[idx], digits=4))")
+println("Residual Size:    $(round(max_val, digits=4))")
+println("Temp on that day: $(round(worst_temp, digits=2)) °C")
 println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")

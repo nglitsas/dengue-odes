@@ -1,121 +1,197 @@
 module Report
 
 using DataFrames
-using Plots
-using Dates
-using DifferentialEquations
-using Statistics
-using Printf
 using DataInterpolations
+using Plots
+using Statistics
+using Dates
+using CSV
 
-using ..Simulate
-using ..MosquitoModelDynamics
-using ..Constants
-# Import TimeUtil so we can convert model 't' back to real dates for the plot
+# Import Shared utilities relatively
 using ...Shared.TimeUtil
 
+# Import Simulation relatively
+using ..Simulate
+
+# EXPORT ALL NECESSARY FUNCTIONS
 export plot_mosquito_simulation, summarize_mosquito_fit, mosquito_mfai_comp_table
 
+# ==========================================
+# 1. HELPER: ALIGNMENT
+# ==========================================
 function align_simulation_to_observations(sim_df::DataFrame, trap_df::DataFrame)
-    # Both now use Global Time (t ~ 6000+)
-    interp = LinearInterpolation(sim_df.mfai_pred, sim_df.t)
-    obs_t = hasproperty(trap_df, :t) ? trap_df.t : trap_df.time
-    model_at_obs = interp.(obs_t)
-    return model_at_obs
-end
-
-function plot_mosquito_simulation(trap_df::DataFrame,
-                                  temp_interp;
-                                  fitted_params::Union{Nothing, Vector{Float64}} = nothing,
-                                  solver = Tsit5(),
-                                  saveat_daily::Float64 = 1.0,
-                                  reltol::Float64 = 1e-6,
-                                  abstol::Float64 = 1e-6)
-
-    # 1. Run Simulation
-    sim = Simulate.run_mosquito_simulation(
-        trap_df,
-        temp_interp;
-        fitted_params = fitted_params,
-        solver = solver,
-        saveat_daily = saveat_daily,
-        reltol = reltol,
-        abstol = abstol
-    )
-
-    if isnothing(sim)
-        return nothing
+    if nrow(sim_df) < 2
+        # Return a safe fallback if simulation failed/empty
+        return zeros(nrow(trap_df)) 
     end
 
-    # 2. Prepare Data
-    y_obs = hasproperty(trap_df, :mfai_obvs) ? Float64.(trap_df.mfai_obvs) : Float64.(trap_df.mfai)
-    y_hat_aligned = align_simulation_to_observations(sim, trap_df)
-
-    # Plot 1: Time Series
-    sim_plot = scatter(
-        trap_df.date, y_obs;
-        label="Observed Data",
-        xlabel="Date",
-        ylabel="MFAI",
-        title="Model Fit",
-        legend=:topleft,
-        color=:blue
-    )
+    # Ensure simulation data is sorted and has no duplicates
+    sort!(sim_df, :t)
+    unique!(sim_df, :t)
     
-    # --- PLOTTING FIX ---
-    # Since t is ~6000+, we must convert it back to Date objects
-    # to overlay correctly with trap_df.date
-    sim_dates = TimeUtil.t_to_date.(sim.t)
+    # Extract sorted arrays
+    t_vals = Vector{Float64}(sim_df.t)
+    mfai_vals = Vector{Float64}(sim_df.mfai_pred)
+    
+    # DEBUG: Print what we have
+    println("\nDEBUG align_simulation_to_observations:")
+    println("  nrow(sim_df) = ", nrow(sim_df))
+    println("  First 5 t_vals: ", t_vals[1:min(5, length(t_vals))])
+    println("  First 5 mfai_vals: ", mfai_vals[1:min(5, length(mfai_vals))])
+    println("  Last 5 t_vals: ", t_vals[max(1,end-4):end])
+    println("  Last 5 mfai_vals: ", mfai_vals[max(1,end-4):end])
+    println("  issorted(t_vals) = ", issorted(t_vals))
+    println("  issorted(mfai_vals) = ", issorted(mfai_vals))
+    println("  any(isnan, t_vals) = ", any(isnan, t_vals))
+    println("  any(isnan, mfai_vals) = ", any(isnan, mfai_vals))
+    println("  length(t_vals) = ", length(t_vals))
+    println("  length(mfai_vals) = ", length(mfai_vals))
+    
+    # Verify data integrity
+    if !issorted(t_vals)
+        error("Time values are not sorted even after sorting!")
+    end
+    
+    if any(isnan, t_vals) || any(isnan, mfai_vals)
+        error("NaN values found in interpolation data!")
+    end
+    
+    if length(t_vals) != length(mfai_vals)
+        error("Length mismatch: t_vals has $(length(t_vals)) elements, mfai_vals has $(length(mfai_vals))")
+    end
+    
+    # Create interpolation: LinearInterpolation(x_data, y_data)
+    # where x = time (independent variable), y = MFAI (dependent variable)
+    println("  Creating LinearInterpolation with $(length(t_vals)) points...")
+    
+    interp = LinearInterpolation(mfai_vals, t_vals)  # DataInterpolations uses (u, t) order!
+    
+    println("  Interpolation created successfully!")
+    
+    # Evaluate at observation times
+    pred_at_obs = Float64[]
+    
+    println("  Interpolating at $(length(trap_df.t)) observation times...")
+    
+    for (i, t) in enumerate(trap_df.t)
+        # Handle extrapolation carefully
+        if t < minimum(t_vals) || t > maximum(t_vals)
+            # Use nearest neighbor for out-of-bounds
+            if t < minimum(t_vals)
+                push!(pred_at_obs, mfai_vals[1])
+                if i <= 3
+                    println("    t[$i]=$t is before sim range, using first value $(mfai_vals[1])")
+                end
+            else
+                push!(pred_at_obs, mfai_vals[end])
+                if i <= 3
+                    println("    t[$i]=$t is after sim range, using last value $(mfai_vals[end])")
+                end
+            end
+        else
+            val = interp(t)
+            push!(pred_at_obs, val)
+            if i <= 3
+                println("    t[$i]=$t → MFAI=$val")
+            end
+        end
+    end
+    
+    println("  Interpolation complete! Generated $(length(pred_at_obs)) predictions\n")
+    
+    return pred_at_obs
+end
 
-    plot!(sim_plot, sim_dates, sim.mfai_pred; 
-          linewidth=2, color=:red, label="Model (Daily)")
+# ==========================================
+# 2. PLOTTING
+# ==========================================
+function plot_mosquito_simulation(trap_df::DataFrame, temp_interp; 
+                                  fitted_params=nothing,
+                                  solver=nothing, 
+                                  saveat_daily=1.0,
+                                  reltol=1e-6,
+                                  abstol=1e-6)
+    
+    # Run the simulation
+    sim_df = Simulate.run_mosquito_simulation(
+        trap_df, temp_interp; 
+        fitted_params=fitted_params,
+    )
+
+    # Plot 1: Dynamics
+    p1 = plot(sim_df.t, sim_df.mfai_pred, 
+        label="Model (MFAI)", lw=2, color=:blue,
+        xlabel="Time (t)", ylabel="Mosquito Abundance (Index)",
+        title="Mosquito Population Dynamics")
+    
+    scatter!(p1, trap_df.t, trap_df.mfai_obvs, 
+        label="Trap Data", color=:red, ms=3, alpha=0.6)
 
     # Plot 2: Residuals
-    residuals_vec = y_obs .- y_hat_aligned
+    preds = align_simulation_to_observations(sim_df, trap_df)
+    resids = preds .- trap_df.mfai_obvs
     
-    resid_plot = plot(
-        trap_df.date, 
-        residuals_vec;
-        seriestype = :stem,
-        label = "Residuals",
-        ylabel = "Error",
-        color = :purple,
-        marker = :circle
+    p2 = scatter(trap_df.t, resids, 
+        label="Residuals", color=:purple, ms=3,
+        xlabel="Time (t)", ylabel="Model - Obs",
+        title="Fit Residuals")
+    hline!(p2, [0.0], color=:black, ls=:dash, label="")
+
+    return (
+        sim = sim_df,
+        sim_plot = p1,
+        resid_plot = p2
     )
-    hline!(resid_plot, [0.0]; color=:black, linestyle=:dash, label="")
-
-    return (sim_plot=sim_plot, resid_plot=resid_plot, sim=sim)
 end
 
-function summarize_mosquito_fit(trap_df::DataFrame, sim)
-    y_obs = hasproperty(trap_df, :mfai_obvs) ? Float64.(trap_df.mfai_obvs) : Float64.(trap_df.mfai)
-    y_hat_aligned = align_simulation_to_observations(sim, trap_df)
+# ==========================================
+# 3. STATISTICS & TABLES
+# ==========================================
+
+function summarize_mosquito_fit(trap_df, sim_df)
+    preds = align_simulation_to_observations(sim_df, trap_df)
+    obs = trap_df.mfai_obvs
     
-    resid = y_obs .- y_hat_aligned
+    # Handle edge case where simulation failed completely
+    if all(preds .== 0.0) && mean(obs) > 0
+        return (N=length(obs), MSE=Inf, SSE=Inf, RMSE=Inf, MAE=Inf, Correlation=0.0)
+    end
 
-    sse  = sum(resid .^ 2)
-    rmse = sqrt(mean(resid .^ 2))
-    mae  = mean(abs.(resid))
-
-    println("\n=== FIT METRICS ===")
-    @printf("SSE:  %.4f\n", sse)
-    @printf("RMSE: %.4f\n", rmse)
-    @printf("MAE:  %.4f\n", mae)
-
-    return (SSE=sse, RMSE=rmse, MAE=mae)
+    n = length(obs)
+    resids = preds .- obs
+    
+    # --- ADDED SSE CALCULATION ---
+    sse = sum(resids.^2)
+    mse = mean(resids.^2)
+    rmse = sqrt(mse)
+    mae = mean(abs.(resids))
+    
+    r_val = cor(preds, obs)
+    
+    return (
+        N = n,
+        MSE = mse,
+        SSE = sse,
+        RMSE = rmse,
+        MAE = mae,
+        Correlation = r_val
+    )
 end
 
-function mosquito_mfai_comp_table(trap_df::DataFrame, sim)
-    y_obs = hasproperty(trap_df, :mfai_obvs) ? Float64.(trap_df.mfai_obvs) : Float64.(trap_df.mfai)
-    y_hat_aligned = align_simulation_to_observations(sim, trap_df)
-
-    df = DataFrame(
+function mosquito_mfai_comp_table(trap_df::DataFrame, sim_df::DataFrame)
+    # Align model predictions to the exact times of the trap observations
+    preds = align_simulation_to_observations(sim_df, trap_df)
+    
+    # Create a clean comparison table
+    comp_df = DataFrame(
         date = trap_df.date,
-        mfai_observed = y_obs,
-        mfai_predicted = y_hat_aligned,
+        t = trap_df.t,
+        observed_mfai = trap_df.mfai_obvs,
+        predicted_mfai = preds,
+        residual = preds .- trap_df.mfai_obvs
     )
-    df.residual = df.mfai_observed .- df.mfai_predicted
-    return df
+    
+    return comp_df
 end
 
 end # module

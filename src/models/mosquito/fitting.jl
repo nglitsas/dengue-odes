@@ -1,3 +1,11 @@
+"""
+CORRECTED VERSION of fitting.jl
+
+Key fixes:
+1. Initial conditions: M_init uses POPULATION, not capacity
+2. C₀ is now treated as TOTAL capacity (not per-household density)
+3. Removed unnecessary multiplication by N_HOUSEHOLDS
+"""
 module Fitting
 
 using DifferentialEquations
@@ -18,25 +26,24 @@ export fit_mosquito_model
 function predict_mfai_fast(p_vals, t_steps, t0, temp_interp, prob_template; 
                            solver=Tsit5(), reltol=1e-5, abstol=1e-5)
     
-    # 1. Construct Parameters using the Struct
-    # We pass C₀ as DENSITY (Mosquitoes per Household).
-    # We rely on Entomology.get_carrying_capacity doing the multiplication by N_HOUSEHOLDS.
+    # 1. Construct Parameters
+    # ✅ CORRECTED: C₀ is now TOTAL capacity (not per-household density)
     p_new = MosquitoModelParams(
-        p_vals[1],      # C₀ (Density)
+        p_vals[1],      # C₀ (TOTAL capacity)
         p_vals[2],      # bₖ
         p_vals[3],      # ϵ
         t0,             # t_start
         temp_interp     # temperature function
     )
 
-    # 2. Re-calculate Initial Conditions (u0)
-    # The ODE needs TOTAL mosquitoes, so we must scale Density * N_HOUSEHOLDS here.
-    total_capacity = p_vals[1] * Constants.N_HOUSEHOLDS
-    
+    # 2. Calculate Initial Conditions
+    # ✅ CORRECTED: Follow paper's specifications exactly
+    # A(0) = 0.85 × C₀ where C₀ is TOTAL capacity
+    # M(0) = 0.7 × N where N is total population (256,088)
     u0_new = SVector{3}(
-        0.85 * total_capacity, # Aquatic: 85% of Capacity
-        0.50 * total_capacity, # Adult:   50% of Capacity
-        0.0                    # Trapped: Starts at 0
+        0.85 * p_vals[1],            # C₀ is already total
+        0.7 * Constants.POPULATION,
+        0.0
     )
 
     # 3. Solve
@@ -51,8 +58,8 @@ function predict_mfai_fast(p_vals, t_steps, t0, temp_interp, prob_template;
         return fill(1e12, length(t_steps))
     end
 
-    # 4. Calculate MFAI using the corrected function from ModelDynamics
-    # This handles the (Catch / Traps / dt) calculation correctly.
+    # 4. Calculate MFAI using CORRECTED function
+    # (No longer divides by dt)
     return compute_mfai_theo(sol, t_steps)
 end
 
@@ -95,11 +102,16 @@ function fit_mosquito_model(observed_times::Vector{Float64},
                             observed_mfai::Vector{Float64},
                             temp_interp;
                             training_days::Float64 = 365.0,
-                            initial_guess = [1.33, 0.31, 900.0],
-                            lower_bounds = [0.1, 0.0, 0.0], 
-                            upper_bounds = [5.0, 1.5, 1820.0], 
+                            initial_guess = [1.27e5, 0.31, 900.0],  # ✅ Updated C₀
+                            lower_bounds = [1e4, 0.0, 0.0],         # ✅ Updated bounds
+                            upper_bounds = [3e5, 1.5, 1820.0],      # ✅ Updated bounds
                             method::Symbol = :lhs,
                             n_lhs_samples::Int = 2000)
+    """
+    ✅ CORRECTED: 
+    - C₀ initial guess now 1.27×10⁵ (total capacity, not per-household)
+    - Bounds updated to reflect total capacity range [10,000 to 300,000]
+    """
 
     # Slice training data
     t0 = observed_times[1]
@@ -108,15 +120,15 @@ function fit_mosquito_model(observed_times::Vector{Float64},
     data_train = observed_mfai[train_mask]
 
     # Problem Template
-    # We initialize with a safe default. The actual values are overwritten in predict_mfai_fast.
     u0_init = SVector{3}(100.0, 100.0, 0.0) 
-    
     tspan = (time_train[1], time_train[end])
     
-    # Initialize params with the Struct
-    p_init = MosquitoModelParams(initial_guess[1], initial_guess[2], initial_guess[3], t0, temp_interp)
+    # Initialize params
+    p_init = MosquitoModelParams(initial_guess[1], initial_guess[2], 
+                                 initial_guess[3], t0, temp_interp)
 
-    prob_template = ODEProblem(MosquitoModelDynamics.CaptureModel_Fast, u0_init, tspan, p_init)
+    prob_template = ODEProblem(MosquitoModelDynamics.CaptureModel_Fast, 
+                               u0_init, tspan, p_init)
 
     # Define model_wrapper for LsqFit
     model_wrapper(t, p) = predict_mfai_fast(p, t, t0, temp_interp, prob_template)
@@ -134,9 +146,9 @@ function fit_mosquito_model(observed_times::Vector{Float64},
     end
 
     @printf("\nFinal Optimized Parameters:\n")
-    @printf("C₀ (Density):     %.3f [Mosquitoes/Household]\n", result.param[1])
-    @printf("bₖ (Growth Rate): %.4f\n", result.param[2])
-    @printf("ϵ  (Shift Day):   %.1f\n", result.param[3])
+    @printf("C₀ (Total Capacity): %.3e [Total Mosquitoes]\n", result.param[1])
+    @printf("bₖ (Growth Rate):    %.4f\n", result.param[2])
+    @printf("ϵ  (Shift Day):      %.1f\n", result.param[3])
     
     return result
 end
