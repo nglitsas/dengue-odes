@@ -2,7 +2,7 @@
 
 julia_version = "1.12.1"
 manifest_format = "2.0"
-project_hash = "fdb88c96b78d63756a576d4529b24ed1a26a4b79"
+project_hash = "1798fa2cfd520e79fb5e531814a190785e32e845"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -443,7 +443,7 @@ uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 version = "1.9.1"
 
 [[deps.DengueODES]]
-deps = ["CSV", "DataFrames", "DataInterpolations", "Dates", "DifferentialEquations", "ForwardDiff", "LatinHypercubeSampling", "LsqFit", "Optim", "Plots", "Printf", "RollingFunctions", "StaticArrays", "Statistics"]
+deps = ["CSV", "DataFrames", "DataInterpolations", "Dates", "DifferentialEquations", "ForwardDiff", "LatinHypercubeSampling", "LsqFit", "Optim", "OrdinaryDiffEq", "Plots", "Printf", "RollingFunctions", "StaticArrays", "Statistics", "TOML"]
 path = "."
 uuid = "3f4c8e9a-8c4e-4b5e-9f7b-1d6f8a3b5c21"
 version = "0.1.0"
@@ -2131,9 +2131,9 @@ version = "1.8.0"
 
 [[deps.SciMLOperators]]
 deps = ["Accessors", "ArrayInterface", "DocStringExtensions", "LinearAlgebra"]
-git-tree-sha1 = "4ccdb8f69ce554744617b75a0a14cc9ce17253e8"
+git-tree-sha1 = "794c760e6aafe9f40dcd7dd30526ea33f0adc8b7"
 uuid = "c0aeaf25-5076-4817-a8d5-81caf7dfa961"
-version = "1.15.0"
+version = "1.15.1"
 weakdeps = ["SparseArrays", "StaticArraysCore"]
 
     [deps.SciMLOperators.extensions]

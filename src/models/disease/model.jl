@@ -21,9 +21,9 @@ Base.@kwdef struct ModelParams
     cₘ  = 0.0              # Control (Adult)
 
     # --- CARRYING CAPACITY ---
-    C₀ = 1.33             
-    bₖ = 0.3165            
-    ϵ  = 909.0             
+    C₀ = 0.1061326 * N_HOUSEHOLDS             
+    bₖ = 0.453566          
+    ϵ  = 4910.463          
 
     # --- INITIALIZATION ---
     ϕ  = 0.14              
