@@ -13,12 +13,18 @@ using RollingFunctions
 # 1. Access Shared Modules from the Parent (DengueODES -> Shared)
 using ..Shared.Temperature
 using ..Shared.TimeUtil
+using ..MosquitoCapture.Entomology
 
-# 2. Include Local Modules (Same directory)
-include("epidem_ento_functions.jl") 
+# 2. Include functions that use the model
+include("epidem_ento_functions.jl")
+using .EpidemEnto
 
 # 3. Include Core Logic
 include("model.jl")
+using .DengueModel
+
+
+
 include("data.jl")
 include("Simulate.jl")
 include("Fit.jl")
@@ -26,8 +32,12 @@ include("Report.jl")
 
 # 3. Use the Modules
 using .Temperature
-using .EpidemEnto
+
 using .Simulate
+using .Data
+using .Fit
+using .Report
+
 
 export 
     ModelParams,

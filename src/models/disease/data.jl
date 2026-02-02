@@ -1,3 +1,4 @@
+module Data
 using CSV
 using DataFrames
 using Dates
@@ -54,3 +55,5 @@ function get_dengue_data(; filename::AbstractString = "data/raw/dengue_cases-201
 
     return df
 end
+
+end # module

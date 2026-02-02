@@ -3,7 +3,8 @@ module Entomology
 using DataInterpolations
 using ..Constants
 
-export get_carrying_capacity, get_rates
+export get_carrying_capacity, oviposition_rate, aquatic_transition,
+       aquatic_mortality, adult_mortality, get_rates
 
 # --- 1. The Function to Fit: Carrying Capacity C(t) ---
 @inline function smooth_heaviside(x, k)
