@@ -61,6 +61,7 @@ function update_params(base_params::ModelParams, p_fitted::AbstractVector, fit_n
         bₖ          = param_dict[:bₖ],
         ϵ           = param_dict[:ϵ],
         ϕ           = param_dict[:ϕ],
+        t_start     = base_params.t_start,
         temp_interp = base_params.temp_interp
     )
 end
@@ -177,9 +178,10 @@ function fit_lhs(time_train::Vector{Float64},
     println("   Best params: ", Dict(fit_config.names[j] => round(best_params[j], sigdigits=6) for j in 1:n_params))
 
     return (param = best_params,
-            resid = best_sse,
-            all_samples = param_samples,
-            all_sse = sse_values)
+        resid = best_sse,
+        all_samples = param_samples,
+        all_sse = sse_values,
+        fit_config = fit_config)
 end
 
 # ============================================================================
@@ -206,7 +208,7 @@ function fit_dengue_model(observed_times::Vector{Float64},
     t_start = time_train[1]
 
     # Base params with temperature driver
-    base_params = ModelParams(temp_interp = temp_interp)
+    base_params = ModelParams(t_start=t_start, temp_interp = temp_interp)
 
     # Template ODE problem
     warmup = 0.0

@@ -18,7 +18,7 @@ resolve(x, t) = x
 # struct_defs.jl
 const N_HOUSEHOLDS = 102751.0
 
-Base.@kwdef struct ModelParams
+Base.@kwdef mutable struct ModelParams
     # --- FIXED CONSTANTS (Table 1) ---
     N   = 256088.0         # Human Population
     μₕ  = 3.605e-5         # Human Mortality
@@ -34,8 +34,27 @@ Base.@kwdef struct ModelParams
     ϵ  = 4910.463          
 
     # --- INITIALIZATION ---
-    ϕ  = 0.14              
+    ϕ  = 0.14
+    
+    # --- Briere coefficients for disease/transmission rates ---
+    # Extrinsic Incubation (θₘ)
+    θₘ_T0::Float64 = 14.0
+    θₘ_Tm::Float64 = 135.0    # (no c scale — fixed form)
 
+    # Biting rate (b)
+    b_c::Float64  = 5.0366e-4
+    b_T0::Float64 = 13.35
+    b_Tm::Float64 = 40.08
+
+    # Mosquito → Human transmission (βₘ)
+    βₘ_c::Float64  = 6.5093e-4
+    βₘ_T0::Float64 = 12.22
+    βₘ_Tm::Float64 = 37.46
+
+    # Human → Mosquito transmission (βₕ)
+    βₕ_c::Float64  = 1.0546e-3
+    βₕ_T0::Float64 = 17.05
+    βₕ_Tm::Float64 = 35.83
     # --- DRIVERS ---
     t_start::Float64 
     # We replace the individual rate placeholders with just the temperature data
@@ -74,7 +93,7 @@ function default_u0(p::ModelParams, t0::Float64)
     H_e0 = 0.0
     H_r0 = 0.0
     # Remaining population is Susceptible
-    H_s0 = N_val - H_e0 - H_i0 - H_r0
+    H_s0 = N_val - H_i0 - H_e0 - H_r0
     
     # Diagnostic for intial values
     println("--- Initial State Debug ---")
@@ -96,7 +115,7 @@ function DengueModel!(du, u, p::ModelParams, t)
 
     # 1. GET ALL BIOLOGICAL RATES FOR CURRENT TEMP
     # This calls your module
-    r = EpidemEnto.get_rates(t, p.temp_interp) 
+    r = EpidemEnto.get_rates(t, p.temp_interp, p)
 
     # 2. CALCULATE CARRYING CAPACITY
     C_val = EpidemEnto.get_carrying_capacity(t, p.C₀, p.bₖ, p.ϵ, p.t_start)

@@ -77,7 +77,7 @@ fit_result = Fit.fit_dengue_model(
     training_days = Float64(training_days),  # use all data for fitting
     config_path = "data/dengue_fit.toml",
     method = :lhs,
-    n_lhs_samples = 800,
+    n_lhs_samples = 10,
     solver = Rosenbrock23()
 )
 
@@ -110,8 +110,8 @@ report_results = Report.plot_dengue_simulation(
 # =======================================================
 println("\n[5] Saving outputs...")
 
-savefig(report_results.sim_plot, "outputs/dengue_fit/fit_plot.png")
-savefig(report_results.resid_plot, "outputs/dengue_fit/fit_resids_plot.png")
+savefig(report_results.plot, "outputs/dengue_fit/fit_plot.png")
+savefig(report_results.residuals, "outputs/dengue_fit/fit_resids_plot.png")  # or whatever the residual plot field is called
 
 stats = Report.summarize_dengue_fit(case_df, report_results.sim)
 stats_df = DataFrame(Metric=["SSE","RMSE","MAE"], Value=[stats.SSE, stats.RMSE, stats.MAE])
