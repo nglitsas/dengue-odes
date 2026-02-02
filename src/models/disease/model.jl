@@ -21,7 +21,7 @@ Base.@kwdef struct ModelParams
     cₘ  = 0.0              # Control (Adult)
 
     # --- CARRYING CAPACITY ---
-    C₀ = 0.5 * N             
+    C₀ = 1.33             
     bₖ = 0.3165            
     ϵ  = 909.0             
 

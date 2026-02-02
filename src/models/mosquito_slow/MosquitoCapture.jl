@@ -3,10 +3,10 @@ module MosquitoCapture
 # -------------------------------------------------------------------
 # Load submodules
 # -------------------------------------------------------------------
-# Order matters: Load dependencies first
+
+include("Data.jl")
 include("constants.jl")
 include("entomology.jl")
-include("Data.jl")
 include("model_dynamics.jl")
 include("fitting.jl")
 include("Simulate.jl")
@@ -15,9 +15,10 @@ include("Report.jl")
 # -------------------------------------------------------------------
 # Bring submodules into scope
 # -------------------------------------------------------------------
+
+using .Data
 using .Constants
 using .Entomology
-using .Data
 using .MosquitoModelDynamics
 using .Fitting
 using .Simulate
@@ -26,19 +27,20 @@ using .Report
 # -------------------------------------------------------------------
 # Public API
 # -------------------------------------------------------------------
+
 export
     # Fitting
     fit_mosquito_model,
 
     # Simulation
     simulate_mosquito,
-    run_mosquito_simulation, # Adding this if you use it in scripts
 
     # Reporting
     report_mosquito_fit,
 
-    # Core Logic
-    CaptureModel_Fast,       # UPDATED: Matches the new speed-optimized function
+    # Core structs (optional, but useful)
+    MosquitoModelParams,
+    CaptureModel!,
     default_u0,
     IX_A, IX_M, IX_T
 

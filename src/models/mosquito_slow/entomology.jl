@@ -55,7 +55,7 @@ function larval_growth(T)
     b₅ = 1.79e-5
     b₆ = -2.62e-7
     b₇ = 1.5e-9
-    σl = b₀ + b₁*T + b₂*T^2 + b₃*T^3 + b₄*T^4 + b₅*T^5 + b₆*T^6 + b₇*T^7
+    σl = b₀ + b\1*T + b₂*T^2 + b₃*T^3 + b₄*T^4 + b₅*T^5 + b₆*T^6 + b₇*T^7
     return max(0.01, σl)
 end
 
