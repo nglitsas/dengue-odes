@@ -109,12 +109,13 @@ function aquatic_transition(temp)
     #     days = max(days, 5.0)  # Minimum 5 days
     #     return 1.0 / days
     # end
-    σl = larval_growth(temp)
-    σp = pupal_growth(temp)
+    # σl = larval_growth(temp)
+    # σp = pupal_growth(temp)
     
-    # Combined rate: 1 / (Days_larval + Days_pupal)
-    γ = 1.0 / ((1.0/σl) + (1.0/σp))
-    return max(0.0, γ)  
+    # # Combined rate: 1 / (Days_larval + Days_pupal)
+    # γ = 1.0 / ((1.0/σl) + (1.0/σp))
+    # return max(0.0, γ)  
+    return 0.1
 
 end
 

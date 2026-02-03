@@ -71,6 +71,6 @@ function get_temperature_interpolator(weather_df::DataFrame)
     @assert !any(isnan, clean_df.t_vals)    "Time values contain NaNs!"
 
     # 4. Create Interpolator
-    return QuadraticSpline(clean_df.temp, clean_df.t_vals)
+    return LinearInterpolation(clean_df.temp, clean_df.t_vals)
 end
 end 

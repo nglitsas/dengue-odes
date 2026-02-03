@@ -24,7 +24,7 @@ export get_carrying_capacity, get_rates
 end
 
 function extrinsic_incubation_rate(temp, p)
-    if temp <= p.θₘ_T0 || temp >= p.θₘ_Tm
+    if temp <= p.θₘ_Tm || temp >= p.θₘ_T0
         return 0.125  # median val of thetah from paper
     end
     theta = (temp - p.θₘ_Tm) / (p.θₘ_T0) 
